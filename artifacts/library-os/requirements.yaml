@@ -1,0 +1,22 @@
+packages:
+  "framer-motion": "For fluid page transitions, layout animations, and interactive component states"
+  "recharts": "For rendering beautiful sales, revenue, and inventory analytics charts on the dashboards"
+  "date-fns": "For formatting and manipulating dates in reports, invoices, and shift management"
+  "react-hook-form": "For robust form state management and validation"
+  "@hookform/resolvers": "To integrate Zod validation with react-hook-form"
+  "lucide-react": "Beautiful, consistent iconography throughout the application"
+  "clsx": "Utility for constructing className strings conditionally"
+  "tailwind-merge": "Utility for merging tailwind classes without style conflicts"
+
+images:
+  - path: "artifacts/library-os/public/images/store-hero.png"
+    description: "A vibrant, modern abstract background with soft geometric shapes in teal, cyan, and amber. Elegant, suitable for an educational bookstore hero section. 3D soft clay style."
+    aspect_ratio: "16:9"
+  - path: "artifacts/library-os/public/images/login-bg.png"
+    description: "A professional, clean, and modern background with subtle glowing gradients in deep blue and teal. Subtle floating books or stationery elements in wireframe style."
+    aspect_ratio: "16:9"
+
+notes:
+  - The application is heavily Right-to-Left (RTL) oriented for Arabic users. Logical CSS properties (e.g., ms-, me-, ps-, pe-) are preferred over physical ones (ml-, mr-).
+  - Authentication token is stored in localStorage as 'library_token' and 'library_user'.
+  - Assumes customFetch in generated API client automatically attaches the Bearer token from localStorage.

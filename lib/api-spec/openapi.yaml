@@ -1,22 +1,54 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: LibraryOS API - Multi-tenant school bookstore management platform
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: auth
+    description: Authentication
+  - name: tenants
+    description: Tenant (library) management - Super Admin only
+  - name: products
+    description: Product management
+  - name: categories
+    description: Product categories
+  - name: cards
+    description: Physical education platform cards
+  - name: platforms
+    description: Educational platforms (Super Admin managed)
+  - name: shifts
+    description: Cashier shift management
+  - name: invoices
+    description: Invoice/sales management
+  - name: returns
+    description: Product returns
+  - name: orders
+    description: Online store orders
+  - name: staff
+    description: Staff management
+  - name: discounts
+    description: Discounts and promotions
+  - name: print-services
+    description: Printing services
+  - name: reports
+    description: Reports and analytics
+  - name: notifications
+    description: Notifications
+  - name: settings
+    description: Library settings
+  - name: store
+    description: Public storefront
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +56,1411 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  # ========== AUTH ==========
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Login (tenant admin, cashier, super admin, or student)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      summary: Logout
+      responses:
+        "200":
+          description: Logged out
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /auth/me:
+    get:
+      operationId: getMe
+      tags: [auth]
+      summary: Get current user
+      responses:
+        "200":
+          description: Current user info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserInfo"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/register-student:
+    post:
+      operationId: registerStudent
+      tags: [auth]
+      summary: Register a student account for online store
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterStudentRequest"
+      responses:
+        "201":
+          description: Student registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ========== TENANTS (Super Admin) ==========
+  /tenants:
+    get:
+      operationId: listTenants
+      tags: [tenants]
+      summary: List all tenants (Super Admin only)
+      responses:
+        "200":
+          description: List of tenants
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Tenant"
+    post:
+      operationId: createTenant
+      tags: [tenants]
+      summary: Create a new tenant (Super Admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTenantRequest"
+      responses:
+        "201":
+          description: Tenant created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Tenant"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /tenants/{tenantId}:
+    get:
+      operationId: getTenant
+      tags: [tenants]
+      summary: Get tenant details
+      parameters:
+        - name: tenantId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Tenant details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Tenant"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateTenant
+      tags: [tenants]
+      summary: Update tenant
+      parameters:
+        - name: tenantId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateTenantRequest"
+      responses:
+        "200":
+          description: Tenant updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Tenant"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /tenants/{tenantId}/toggle-status:
+    post:
+      operationId: toggleTenantStatus
+      tags: [tenants]
+      summary: Activate or deactivate a tenant
+      parameters:
+        - name: tenantId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Status toggled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Tenant"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ========== PRODUCTS ==========
+  /products:
+    get:
+      operationId: listProducts
+      tags: [products]
+      summary: List products for current tenant
+      parameters:
+        - name: category
+          in: query
+          schema:
+            type: string
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: showInStore
+          in: query
+          schema:
+            type: boolean
+        - name: lowStock
+          in: query
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: List of products
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Product"
+    post:
+      operationId: createProduct
+      tags: [products]
+      summary: Create a new product
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateProductRequest"
+      responses:
+        "201":
+          description: Product created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /products/{productId}:
+    get:
+      operationId: getProduct
+      tags: [products]
+      summary: Get product by ID
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Product details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateProduct
+      tags: [products]
+      summary: Update a product
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProductRequest"
+      responses:
+        "200":
+          description: Product updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteProduct
+      tags: [products]
+      summary: Delete a product
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Product deleted
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /products/{productId}/toggle-store:
+    post:
+      operationId: toggleProductStore
+      tags: [products]
+      summary: Toggle product visibility in online store
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Visibility toggled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+
+  /products/barcode/{barcode}:
+    get:
+      operationId: getProductByBarcode
+      tags: [products]
+      summary: Find product by barcode (for POS scanning)
+      parameters:
+        - name: barcode
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Product found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ========== CARDS ==========
+  /cards:
+    get:
+      operationId: listCards
+      tags: [cards]
+      summary: List physical platform cards for current tenant
+      responses:
+        "200":
+          description: List of cards
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Card"
+    post:
+      operationId: createCard
+      tags: [cards]
+      summary: Add physical card stock
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCardRequest"
+      responses:
+        "201":
+          description: Card created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Card"
+
+  /cards/{cardId}:
+    patch:
+      operationId: updateCard
+      tags: [cards]
+      summary: Update card
+      parameters:
+        - name: cardId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateCardRequest"
+      responses:
+        "200":
+          description: Card updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Card"
+    delete:
+      operationId: deleteCard
+      tags: [cards]
+      summary: Delete card
+      parameters:
+        - name: cardId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  # ========== EDUCATIONAL PLATFORMS (Super Admin) ==========
+  /platforms:
+    get:
+      operationId: listPlatforms
+      tags: [platforms]
+      summary: List all educational platforms
+      responses:
+        "200":
+          description: List of platforms
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Platform"
+    post:
+      operationId: createPlatform
+      tags: [platforms]
+      summary: Create educational platform (Super Admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePlatformRequest"
+      responses:
+        "201":
+          description: Platform created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Platform"
+
+  /platforms/{platformId}:
+    patch:
+      operationId: updatePlatform
+      tags: [platforms]
+      summary: Update educational platform
+      parameters:
+        - name: platformId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdatePlatformRequest"
+      responses:
+        "200":
+          description: Platform updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Platform"
+    delete:
+      operationId: deletePlatform
+      tags: [platforms]
+      summary: Delete educational platform
+      parameters:
+        - name: platformId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  # ========== SHIFTS ==========
+  /shifts:
+    get:
+      operationId: listShifts
+      tags: [shifts]
+      summary: List shifts for current tenant
+      parameters:
+        - name: staffId
+          in: query
+          schema:
+            type: integer
+        - name: date
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: List of shifts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Shift"
+
+  /shifts/open:
+    post:
+      operationId: openShift
+      tags: [shifts]
+      summary: Open a new shift
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OpenShiftRequest"
+      responses:
+        "201":
+          description: Shift opened
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Shift"
+
+  /shifts/current:
+    get:
+      operationId: getCurrentShift
+      tags: [shifts]
+      summary: Get current open shift for logged-in cashier
+      responses:
+        "200":
+          description: Current shift
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Shift"
+        "404":
+          description: No open shift
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /shifts/{shiftId}/close:
+    post:
+      operationId: closeShift
+      tags: [shifts]
+      summary: Close a shift
+      parameters:
+        - name: shiftId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CloseShiftRequest"
+      responses:
+        "200":
+          description: Shift closed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Shift"
+
+  /shifts/{shiftId}:
+    get:
+      operationId: getShift
+      tags: [shifts]
+      summary: Get shift details with summary
+      parameters:
+        - name: shiftId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Shift details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ShiftWithSummary"
+
+  # ========== INVOICES ==========
+  /invoices:
+    get:
+      operationId: listInvoices
+      tags: [invoices]
+      summary: List invoices
+      parameters:
+        - name: shiftId
+          in: query
+          schema:
+            type: integer
+        - name: dateFrom
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: dateTo
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: staffId
+          in: query
+          schema:
+            type: integer
+        - name: paymentMethod
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of invoices
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Invoice"
+    post:
+      operationId: createInvoice
+      tags: [invoices]
+      summary: Create a new invoice (sale)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateInvoiceRequest"
+      responses:
+        "201":
+          description: Invoice created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Invoice"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /invoices/{invoiceId}:
+    get:
+      operationId: getInvoice
+      tags: [invoices]
+      summary: Get invoice details
+      parameters:
+        - name: invoiceId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Invoice details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Invoice"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /invoices/{invoiceId}/cancel:
+    post:
+      operationId: cancelInvoice
+      tags: [invoices]
+      summary: Cancel an invoice (Tenant Admin only)
+      parameters:
+        - name: invoiceId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CancelInvoiceRequest"
+      responses:
+        "200":
+          description: Invoice cancelled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Invoice"
+
+  # ========== RETURNS ==========
+  /returns:
+    get:
+      operationId: listReturns
+      tags: [returns]
+      summary: List returns for current tenant
+      responses:
+        "200":
+          description: List of returns
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Return"
+    post:
+      operationId: createReturn
+      tags: [returns]
+      summary: Process a product return
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateReturnRequest"
+      responses:
+        "201":
+          description: Return processed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Return"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ========== STAFF ==========
+  /staff:
+    get:
+      operationId: listStaff
+      tags: [staff]
+      summary: List staff for current tenant
+      responses:
+        "200":
+          description: List of staff
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Staff"
+    post:
+      operationId: createStaff
+      tags: [staff]
+      summary: Create a staff member
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateStaffRequest"
+      responses:
+        "201":
+          description: Staff created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Staff"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /staff/{staffId}:
+    patch:
+      operationId: updateStaff
+      tags: [staff]
+      summary: Update staff member
+      parameters:
+        - name: staffId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateStaffRequest"
+      responses:
+        "200":
+          description: Staff updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Staff"
+    delete:
+      operationId: deleteStaff
+      tags: [staff]
+      summary: Delete staff member
+      parameters:
+        - name: staffId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /staff/{staffId}/toggle-status:
+    post:
+      operationId: toggleStaffStatus
+      tags: [staff]
+      summary: Activate or deactivate staff account
+      parameters:
+        - name: staffId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Status toggled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Staff"
+
+  # ========== DISCOUNTS ==========
+  /discounts:
+    get:
+      operationId: listDiscounts
+      tags: [discounts]
+      summary: List discounts for current tenant
+      responses:
+        "200":
+          description: List of discounts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Discount"
+    post:
+      operationId: createDiscount
+      tags: [discounts]
+      summary: Create a discount
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateDiscountRequest"
+      responses:
+        "201":
+          description: Discount created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Discount"
+
+  /discounts/{discountId}:
+    patch:
+      operationId: updateDiscount
+      tags: [discounts]
+      summary: Update a discount
+      parameters:
+        - name: discountId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateDiscountRequest"
+      responses:
+        "200":
+          description: Discount updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Discount"
+    delete:
+      operationId: deleteDiscount
+      tags: [discounts]
+      summary: Delete a discount
+      parameters:
+        - name: discountId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /discounts/{discountId}/toggle:
+    post:
+      operationId: toggleDiscount
+      tags: [discounts]
+      summary: Toggle discount active/inactive
+      parameters:
+        - name: discountId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Toggled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Discount"
+
+  # ========== PRINT SERVICES ==========
+  /print-services:
+    get:
+      operationId: listPrintServices
+      tags: [print-services]
+      summary: List print services for current tenant
+      responses:
+        "200":
+          description: List of print services
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PrintService"
+    post:
+      operationId: createPrintService
+      tags: [print-services]
+      summary: Create a print service
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePrintServiceRequest"
+      responses:
+        "201":
+          description: Print service created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PrintService"
+
+  /print-services/{serviceId}:
+    patch:
+      operationId: updatePrintService
+      tags: [print-services]
+      summary: Update a print service
+      parameters:
+        - name: serviceId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdatePrintServiceRequest"
+      responses:
+        "200":
+          description: Print service updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PrintService"
+    delete:
+      operationId: deletePrintService
+      tags: [print-services]
+      summary: Delete a print service
+      parameters:
+        - name: serviceId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  # ========== ORDERS (Online Store) ==========
+  /orders:
+    get:
+      operationId: listOrders
+      tags: [orders]
+      summary: List orders for current tenant
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of orders
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Order"
+
+  /orders/{orderId}:
+    get:
+      operationId: getOrder
+      tags: [orders]
+      summary: Get order details
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Order details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /orders/{orderId}/status:
+    patch:
+      operationId: updateOrderStatus
+      tags: [orders]
+      summary: Update order status
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateOrderStatusRequest"
+      responses:
+        "200":
+          description: Order status updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+
+  /orders/{orderId}/cancel:
+    post:
+      operationId: cancelOrder
+      tags: [orders]
+      summary: Cancel an order (Tenant Admin only)
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Order cancelled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+
+  # ========== REPORTS ==========
+  /reports/sales:
+    get:
+      operationId: getSalesReport
+      tags: [reports]
+      summary: Get sales report
+      parameters:
+        - name: period
+          in: query
+          schema:
+            type: string
+            enum: [daily, weekly, monthly]
+        - name: dateFrom
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: dateTo
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: Sales report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SalesReport"
+
+  /reports/dashboard:
+    get:
+      operationId: getDashboardStats
+      tags: [reports]
+      summary: Get dashboard statistics for tenant admin overview
+      responses:
+        "200":
+          description: Dashboard stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardStats"
+
+  /reports/top-products:
+    get:
+      operationId: getTopProducts
+      tags: [reports]
+      summary: Get top-selling products
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+        - name: dateFrom
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: dateTo
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: Top products
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TopProduct"
+
+  /reports/payment-methods:
+    get:
+      operationId: getPaymentMethodsReport
+      tags: [reports]
+      summary: Get payment methods breakdown
+      parameters:
+        - name: dateFrom
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: dateTo
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: Payment methods report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentMethodsReport"
+
+  # ========== NOTIFICATIONS ==========
+  /notifications:
+    get:
+      operationId: listNotifications
+      tags: [notifications]
+      summary: List notifications for current user
+      responses:
+        "200":
+          description: List of notifications
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Notification"
+
+  /notifications/{notificationId}/read:
+    post:
+      operationId: markNotificationRead
+      tags: [notifications]
+      summary: Mark a notification as read
+      parameters:
+        - name: notificationId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Notification marked as read
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Notification"
+
+  /notifications/mark-all-read:
+    post:
+      operationId: markAllNotificationsRead
+      tags: [notifications]
+      summary: Mark all notifications as read
+      responses:
+        "200":
+          description: All marked as read
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  # ========== SETTINGS ==========
+  /settings:
+    get:
+      operationId: getSettings
+      tags: [settings]
+      summary: Get library settings
+      responses:
+        "200":
+          description: Settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TenantSettings"
+    patch:
+      operationId: updateSettings
+      tags: [settings]
+      summary: Update library settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSettingsRequest"
+      responses:
+        "200":
+          description: Settings updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TenantSettings"
+
+  # ========== STORE (Public - per tenant) ==========
+  /store/{tenantSlug}/products:
+    get:
+      operationId: listStoreProducts
+      tags: [store]
+      summary: List products in online store
+      parameters:
+        - name: tenantSlug
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: category
+          in: query
+          schema:
+            type: string
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Products list for store
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StoreProduct"
+
+  /store/{tenantSlug}/products/{productId}:
+    get:
+      operationId: getStoreProduct
+      tags: [store]
+      summary: Get product details for store
+      parameters:
+        - name: tenantSlug
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: productId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Product details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StoreProduct"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /store/{tenantSlug}/orders:
+    post:
+      operationId: createStoreOrder
+      tags: [store]
+      summary: Place an order from online store
+      parameters:
+        - name: tenantSlug
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateStoreOrderRequest"
+      responses:
+        "201":
+          description: Order placed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /store/my-orders:
+    get:
+      operationId: getMyOrders
+      tags: [store]
+      summary: Get logged-in student's orders
+      responses:
+        "200":
+          description: Student's orders
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Order"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +1471,1244 @@ components:
       required:
         - status
 
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+      required:
+        - success
+        - message
+
+    # AUTH
+    LoginRequest:
+      type: object
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+        role:
+          type: string
+          enum: [super_admin, tenant_admin, cashier, student]
+      required:
+        - username
+        - password
+        - role
+
+    AuthResponse:
+      type: object
+      properties:
+        token:
+          type: string
+        user:
+          $ref: "#/components/schemas/UserInfo"
+      required:
+        - token
+        - user
+
+    UserInfo:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        username:
+          type: string
+        role:
+          type: string
+          enum: [super_admin, tenant_admin, cashier, student]
+        tenantId:
+          type: ["integer", "null"]
+        tenantName:
+          type: ["string", "null"]
+        tenantSlug:
+          type: ["string", "null"]
+      required:
+        - id
+        - name
+        - username
+        - role
+
+    RegisterStudentRequest:
+      type: object
+      properties:
+        fullName:
+          type: string
+        phone:
+          type: string
+        password:
+          type: string
+        tenantSlug:
+          type: string
+      required:
+        - fullName
+        - phone
+        - password
+        - tenantSlug
+
+    # TENANT
+    Tenant:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        slug:
+          type: string
+        address:
+          type: ["string", "null"]
+        phone:
+          type: ["string", "null"]
+        whatsappNumber:
+          type: ["string", "null"]
+        ownerName:
+          type: string
+        ownerEmail:
+          type: string
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - slug
+        - ownerName
+        - ownerEmail
+        - isActive
+        - createdAt
+
+    CreateTenantRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        slug:
+          type: string
+        address:
+          type: string
+        phone:
+          type: string
+        whatsappNumber:
+          type: string
+        ownerName:
+          type: string
+        ownerEmail:
+          type: string
+        ownerPassword:
+          type: string
+      required:
+        - name
+        - slug
+        - ownerName
+        - ownerEmail
+        - ownerPassword
+
+    UpdateTenantRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        address:
+          type: string
+        phone:
+          type: string
+        whatsappNumber:
+          type: string
+        ownerName:
+          type: string
+        ownerEmail:
+          type: string
+
+    # PRODUCT
+    Product:
+      type: object
+      properties:
+        id:
+          type: integer
+        tenantId:
+          type: integer
+        name:
+          type: string
+        category:
+          type: string
+        barcode:
+          type: ["string", "null"]
+        price:
+          type: number
+        stockQuantity:
+          type: integer
+        stockAlertThreshold:
+          type: integer
+        imageUrl:
+          type: ["string", "null"]
+        showInStore:
+          type: boolean
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - tenantId
+        - name
+        - category
+        - price
+        - stockQuantity
+        - stockAlertThreshold
+        - showInStore
+        - isActive
+        - createdAt
+
+    CreateProductRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        category:
+          type: string
+        barcode:
+          type: string
+        price:
+          type: number
+        stockQuantity:
+          type: integer
+        stockAlertThreshold:
+          type: integer
+        imageUrl:
+          type: string
+        showInStore:
+          type: boolean
+      required:
+        - name
+        - category
+        - price
+        - stockQuantity
+        - stockAlertThreshold
+
+    UpdateProductRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        category:
+          type: string
+        barcode:
+          type: string
+        price:
+          type: number
+        stockQuantity:
+          type: integer
+        stockAlertThreshold:
+          type: integer
+        imageUrl:
+          type: string
+        showInStore:
+          type: boolean
+        isActive:
+          type: boolean
+
+    StoreProduct:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        category:
+          type: string
+        price:
+          type: number
+        discountedPrice:
+          type: ["number", "null"]
+        imageUrl:
+          type: ["string", "null"]
+        stockQuantity:
+          type: integer
+        isAvailable:
+          type: boolean
+      required:
+        - id
+        - name
+        - category
+        - price
+        - stockQuantity
+        - isAvailable
+
+    # CARD
+    Card:
+      type: object
+      properties:
+        id:
+          type: integer
+        tenantId:
+          type: integer
+        platformName:
+          type: string
+        cardValue:
+          type: number
+        quantity:
+          type: integer
+        price:
+          type: number
+        alertThreshold:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - tenantId
+        - platformName
+        - cardValue
+        - quantity
+        - price
+        - alertThreshold
+        - createdAt
+
+    CreateCardRequest:
+      type: object
+      properties:
+        platformName:
+          type: string
+        cardValue:
+          type: number
+        quantity:
+          type: integer
+        price:
+          type: number
+        alertThreshold:
+          type: integer
+      required:
+        - platformName
+        - cardValue
+        - quantity
+        - price
+        - alertThreshold
+
+    UpdateCardRequest:
+      type: object
+      properties:
+        quantity:
+          type: integer
+        price:
+          type: number
+        alertThreshold:
+          type: integer
+
+    # PLATFORM (Educational)
+    Platform:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        description:
+          type: ["string", "null"]
+        grades:
+          type: array
+          items:
+            type: string
+        subjects:
+          type: array
+          items:
+            type: string
+        pricingTiers:
+          type: array
+          items:
+            $ref: "#/components/schemas/PlatformPricingTier"
+        currentOffer:
+          type: ["string", "null"]
+        isActive:
+          type: boolean
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - grades
+        - subjects
+        - pricingTiers
+        - isActive
+        - updatedAt
+
+    PlatformPricingTier:
+      type: object
+      properties:
+        cardValue:
+          type: number
+        price:
+          type: number
+        discountedPrice:
+          type: ["number", "null"]
+      required:
+        - cardValue
+        - price
+
+    CreatePlatformRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        grades:
+          type: array
+          items:
+            type: string
+        subjects:
+          type: array
+          items:
+            type: string
+        pricingTiers:
+          type: array
+          items:
+            $ref: "#/components/schemas/PlatformPricingTier"
+        currentOffer:
+          type: string
+      required:
+        - name
+        - grades
+        - subjects
+        - pricingTiers
+
+    UpdatePlatformRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        grades:
+          type: array
+          items:
+            type: string
+        subjects:
+          type: array
+          items:
+            type: string
+        pricingTiers:
+          type: array
+          items:
+            $ref: "#/components/schemas/PlatformPricingTier"
+        currentOffer:
+          type: string
+        isActive:
+          type: boolean
+
+    # SHIFT
+    Shift:
+      type: object
+      properties:
+        id:
+          type: integer
+        tenantId:
+          type: integer
+        staffId:
+          type: integer
+        staffName:
+          type: string
+        openingBalance:
+          type: number
+        closingBalance:
+          type: ["number", "null"]
+        status:
+          type: string
+          enum: [open, closed]
+        openedAt:
+          type: string
+          format: date-time
+        closedAt:
+          type: ["string", "null"]
+          format: date-time
+      required:
+        - id
+        - tenantId
+        - staffId
+        - staffName
+        - openingBalance
+        - status
+        - openedAt
+
+    ShiftWithSummary:
+      allOf:
+        - $ref: "#/components/schemas/Shift"
+        - type: object
+          properties:
+            totalInvoices:
+              type: integer
+            totalSales:
+              type: number
+            cashSales:
+              type: number
+            cardSales:
+              type: number
+            totalReturns:
+              type: number
+          required:
+            - totalInvoices
+            - totalSales
+            - cashSales
+            - cardSales
+            - totalReturns
+
+    OpenShiftRequest:
+      type: object
+      properties:
+        openingBalance:
+          type: number
+      required:
+        - openingBalance
+
+    CloseShiftRequest:
+      type: object
+      properties:
+        closingBalance:
+          type: number
+      required:
+        - closingBalance
+
+    # INVOICE
+    Invoice:
+      type: object
+      properties:
+        id:
+          type: integer
+        tenantId:
+          type: integer
+        shiftId:
+          type: integer
+        staffId:
+          type: integer
+        staffName:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/InvoiceItem"
+        subtotal:
+          type: number
+        discountAmount:
+          type: number
+        discountPercent:
+          type: ["number", "null"]
+        total:
+          type: number
+        paymentMethod:
+          type: string
+          enum: [cash, card]
+        status:
+          type: string
+          enum: [active, cancelled]
+        cancelReason:
+          type: ["string", "null"]
+        isSynced:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - tenantId
+        - shiftId
+        - staffId
+        - staffName
+        - items
+        - subtotal
+        - discountAmount
+        - total
+        - paymentMethod
+        - status
+        - isSynced
+        - createdAt
+
+    InvoiceItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        productId:
+          type: ["integer", "null"]
+        productName:
+          type: string
+        quantity:
+          type: integer
+        unitPrice:
+          type: number
+        discountAmount:
+          type: number
+        total:
+          type: number
+        itemType:
+          type: string
+          enum: [product, card, print_service]
+      required:
+        - id
+        - productName
+        - quantity
+        - unitPrice
+        - discountAmount
+        - total
+        - itemType
+
+    CreateInvoiceRequest:
+      type: object
+      properties:
+        shiftId:
+          type: integer
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/CreateInvoiceItemRequest"
+        discountAmount:
+          type: number
+        discountPercent:
+          type: number
+        paymentMethod:
+          type: string
+          enum: [cash, card]
+      required:
+        - shiftId
+        - items
+        - paymentMethod
+
+    CreateInvoiceItemRequest:
+      type: object
+      properties:
+        productId:
+          type: integer
+        productName:
+          type: string
+        quantity:
+          type: integer
+        unitPrice:
+          type: number
+        itemType:
+          type: string
+          enum: [product, card, print_service]
+      required:
+        - productName
+        - quantity
+        - unitPrice
+        - itemType
+
+    CancelInvoiceRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+      required:
+        - reason
+
+    # RETURN
+    Return:
+      type: object
+      properties:
+        id:
+          type: integer
+        tenantId:
+          type: integer
+        invoiceId:
+          type: integer
+        staffId:
+          type: integer
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReturnItem"
+        totalRefund:
+          type: number
+        refundMethod:
+          type: string
+          enum: [cash, credit]
+        reason:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - tenantId
+        - invoiceId
+        - staffId
+        - items
+        - totalRefund
+        - refundMethod
+        - reason
+        - createdAt
+
+    ReturnItem:
+      type: object
+      properties:
+        productId:
+          type: integer
+        productName:
+          type: string
+        quantity:
+          type: integer
+        unitPrice:
+          type: number
+      required:
+        - productName
+        - quantity
+        - unitPrice
+
+    CreateReturnRequest:
+      type: object
+      properties:
+        invoiceId:
+          type: integer
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReturnItem"
+        refundMethod:
+          type: string
+          enum: [cash, credit]
+        reason:
+          type: string
+      required:
+        - invoiceId
+        - items
+        - refundMethod
+        - reason
+
+    # STAFF
+    Staff:
+      type: object
+      properties:
+        id:
+          type: integer
+        tenantId:
+          type: integer
+        name:
+          type: string
+        username:
+          type: string
+        isActive:
+          type: boolean
+        lastLoginAt:
+          type: ["string", "null"]
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - tenantId
+        - name
+        - username
+        - isActive
+        - createdAt
+
+    CreateStaffRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        username:
+          type: string
+        password:
+          type: string
+      required:
+        - name
+        - username
+        - password
+
+    UpdateStaffRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        username:
+          type: string
+        password:
+          type: string
+
+    # DISCOUNT
+    Discount:
+      type: object
+      properties:
+        id:
+          type: integer
+        tenantId:
+          type: integer
+        name:
+          type: string
+        type:
+          type: string
+          enum: [product, category, buy_x_get_y, invoice]
+        discountValue:
+          type: number
+        discountType:
+          type: string
+          enum: [percent, amount]
+        productId:
+          type: ["integer", "null"]
+        productName:
+          type: ["string", "null"]
+        category:
+          type: ["string", "null"]
+        buyQuantity:
+          type: ["integer", "null"]
+        getFreeQuantity:
+          type: ["integer", "null"]
+        minInvoiceAmount:
+          type: ["number", "null"]
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - tenantId
+        - name
+        - type
+        - discountValue
+        - discountType
+        - startDate
+        - endDate
+        - isActive
+        - createdAt
+
+    CreateDiscountRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+          enum: [product, category, buy_x_get_y, invoice]
+        discountValue:
+          type: number
+        discountType:
+          type: string
+          enum: [percent, amount]
+        productId:
+          type: integer
+        category:
+          type: string
+        buyQuantity:
+          type: integer
+        getFreeQuantity:
+          type: integer
+        minInvoiceAmount:
+          type: number
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        isActive:
+          type: boolean
+      required:
+        - name
+        - type
+        - discountValue
+        - discountType
+        - startDate
+        - endDate
+
+    UpdateDiscountRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        discountValue:
+          type: number
+        discountType:
+          type: string
+          enum: [percent, amount]
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        isActive:
+          type: boolean
+
+    # PRINT SERVICE
+    PrintService:
+      type: object
+      properties:
+        id:
+          type: integer
+        tenantId:
+          type: integer
+        name:
+          type: string
+        pricingType:
+          type: string
+          enum: [fixed, per_page]
+        price:
+          type: number
+        paperSize:
+          type: ["string", "null"]
+        colorType:
+          type: ["string", "null"]
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - tenantId
+        - name
+        - pricingType
+        - price
+        - isActive
+        - createdAt
+
+    CreatePrintServiceRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        pricingType:
+          type: string
+          enum: [fixed, per_page]
+        price:
+          type: number
+        paperSize:
+          type: string
+        colorType:
+          type: string
+      required:
+        - name
+        - pricingType
+        - price
+
+    UpdatePrintServiceRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        pricingType:
+          type: string
+          enum: [fixed, per_page]
+        price:
+          type: number
+        paperSize:
+          type: string
+        colorType:
+          type: string
+        isActive:
+          type: boolean
+
+    # ORDER
+    Order:
+      type: object
+      properties:
+        id:
+          type: integer
+        tenantId:
+          type: integer
+        studentId:
+          type: integer
+        studentName:
+          type: string
+        studentPhone:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/OrderItem"
+        total:
+          type: number
+        status:
+          type: string
+          enum: [new, preparing, ready, delivered, cancelled]
+        notes:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - tenantId
+        - studentId
+        - studentName
+        - studentPhone
+        - items
+        - total
+        - status
+        - createdAt
+        - updatedAt
+
+    OrderItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        productId:
+          type: integer
+        productName:
+          type: string
+        quantity:
+          type: integer
+        unitPrice:
+          type: number
+        total:
+          type: number
+      required:
+        - id
+        - productId
+        - productName
+        - quantity
+        - unitPrice
+        - total
+
+    CreateStoreOrderRequest:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              productId:
+                type: integer
+              quantity:
+                type: integer
+            required:
+              - productId
+              - quantity
+        notes:
+          type: string
+      required:
+        - items
+
+    UpdateOrderStatusRequest:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [new, preparing, ready, delivered, cancelled]
+      required:
+        - status
+
+    # REPORTS
+    SalesReport:
+      type: object
+      properties:
+        period:
+          type: string
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/SalesDataPoint"
+        totalSales:
+          type: number
+        totalInvoices:
+          type: integer
+        categoryBreakdown:
+          type: array
+          items:
+            $ref: "#/components/schemas/CategorySalesBreakdown"
+      required:
+        - period
+        - data
+        - totalSales
+        - totalInvoices
+        - categoryBreakdown
+
+    SalesDataPoint:
+      type: object
+      properties:
+        date:
+          type: string
+        sales:
+          type: number
+        invoices:
+          type: integer
+      required:
+        - date
+        - sales
+        - invoices
+
+    CategorySalesBreakdown:
+      type: object
+      properties:
+        category:
+          type: string
+        sales:
+          type: number
+        percentage:
+          type: number
+      required:
+        - category
+        - sales
+        - percentage
+
+    DashboardStats:
+      type: object
+      properties:
+        todaySales:
+          type: number
+        todayInvoices:
+          type: integer
+        newOrders:
+          type: integer
+        lowStockProducts:
+          type: integer
+        recentInvoices:
+          type: array
+          items:
+            $ref: "#/components/schemas/Invoice"
+        salesByCategory:
+          type: array
+          items:
+            $ref: "#/components/schemas/CategorySalesBreakdown"
+      required:
+        - todaySales
+        - todayInvoices
+        - newOrders
+        - lowStockProducts
+        - recentInvoices
+        - salesByCategory
+
+    TopProduct:
+      type: object
+      properties:
+        productId:
+          type: integer
+        productName:
+          type: string
+        category:
+          type: string
+        quantitySold:
+          type: integer
+        revenue:
+          type: number
+      required:
+        - productId
+        - productName
+        - category
+        - quantitySold
+        - revenue
+
+    PaymentMethodsReport:
+      type: object
+      properties:
+        cashTotal:
+          type: number
+        cardTotal:
+          type: number
+        cashPercent:
+          type: number
+        cardPercent:
+          type: number
+      required:
+        - cashTotal
+        - cardTotal
+        - cashPercent
+        - cardPercent
+
+    # NOTIFICATION
+    Notification:
+      type: object
+      properties:
+        id:
+          type: integer
+        tenantId:
+          type: integer
+        type:
+          type: string
+          enum: [new_order, low_stock, invoice_cancelled]
+        title:
+          type: string
+        message:
+          type: string
+        isRead:
+          type: boolean
+        referenceId:
+          type: ["integer", "null"]
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - tenantId
+        - type
+        - title
+        - message
+        - isRead
+        - createdAt
+
+    # SETTINGS
+    TenantSettings:
+      type: object
+      properties:
+        id:
+          type: integer
+        tenantId:
+          type: integer
+        libraryName:
+          type: string
+        logoUrl:
+          type: ["string", "null"]
+        address:
+          type: ["string", "null"]
+        phone:
+          type: ["string", "null"]
+        defaultStockAlertThreshold:
+          type: integer
+        acceptCashPayment:
+          type: boolean
+        acceptCardPayment:
+          type: boolean
+      required:
+        - id
+        - tenantId
+        - libraryName
+        - defaultStockAlertThreshold
+        - acceptCashPayment
+        - acceptCardPayment
+
+    UpdateSettingsRequest:
+      type: object
+      properties:
+        libraryName:
+          type: string
+        logoUrl:
+          type: string
+        address:
+          type: string
+        phone:
+          type: string
+        defaultStockAlertThreshold:
+          type: integer
+        acceptCashPayment:
+          type: boolean
+        acceptCardPayment:
+          type: boolean
