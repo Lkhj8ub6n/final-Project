@@ -1,24 +1,39 @@
 import React, { useState } from "react";
 import { DashboardLayout } from "@/components/layouts";
-import { useGetSalesReport, useGetTopProducts, useGetPaymentMethodsReport } from "@workspace/api-client-react";
+import { useGetSalesReport, useGetTopProducts, useGetPaymentMethodsReport, GetSalesReportPeriod } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts";
+import {
+  AreaChart, Area, BarChart, Bar, XAxis, YAxis,
+  CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend
+} from "recharts";
 import { TrendingUp, ShoppingBag, DollarSign, Package } from "lucide-react";
 
 const COLORS = ["hsl(var(--primary))", "#3B82F6", "#8B5CF6", "#F59E0B", "#10B981"];
 
+const periodMap = {
+  daily: { label: "يومي", value: GetSalesReportPeriod.daily },
+  weekly: { label: "أسبوعي", value: GetSalesReportPeriod.weekly },
+  monthly: { label: "شهري", value: GetSalesReportPeriod.monthly },
+} as const;
+
 export default function TenantReports() {
-  const [period, setPeriod] = useState<"day" | "week" | "month" | "year">("month");
+  const [period, setPeriod] = useState<typeof GetSalesReportPeriod[keyof typeof GetSalesReportPeriod]>(GetSalesReportPeriod.monthly);
+
   const { data: salesReport } = useGetSalesReport({ period });
-  const { data: topProducts } = useGetTopProducts({ period, limit: 5 });
-  const { data: paymentReport } = useGetPaymentMethodsReport({ period });
+  const { data: topProducts } = useGetTopProducts({ limit: 5 });
+  const { data: paymentReport } = useGetPaymentMethodsReport();
 
-  const periodLabels = { day: "اليوم", week: "الأسبوع", month: "الشهر", year: "السنة" };
+  const paymentChartData = paymentReport
+    ? [
+        { name: "نقدي", value: paymentReport.cashTotal || 0 },
+        { name: "بطاقة", value: paymentReport.cardTotal || 0 },
+      ]
+    : [];
 
-  const paymentChartData = paymentReport ? [
-    { name: "نقدي", value: paymentReport.cashCount || 0 },
-    { name: "بطاقة", value: paymentReport.cardCount || 0 },
-  ] : [];
+  const topProductsChartData = topProducts?.map(p => ({
+    name: p.productName.slice(0, 20),
+    quantity: p.quantitySold,
+  })) ?? [];
 
   return (
     <DashboardLayout>
@@ -29,25 +44,26 @@ export default function TenantReports() {
             <p className="text-muted-foreground mt-1">تحليل مبيعات وأداء المكتبة</p>
           </div>
           <div className="flex gap-2 bg-white rounded-xl border border-border/50 p-1 shadow-sm">
-            {(["day", "week", "month", "year"] as const).map(p => (
+            {Object.entries(periodMap).map(([key, { label, value }]) => (
               <button
-                key={p}
-                onClick={() => setPeriod(p)}
-                className={`px-4 py-2 rounded-lg font-bold text-sm transition-all ${period === p ? "bg-primary text-white shadow-md" : "text-muted-foreground hover:text-foreground"}`}
+                key={key}
+                onClick={() => setPeriod(value)}
+                className={`px-4 py-2 rounded-lg font-bold text-sm transition-all ${
+                  period === value ? "bg-primary text-white shadow-md" : "text-muted-foreground hover:text-foreground"
+                }`}
               >
-                {periodLabels[p]}
+                {label}
               </button>
             ))}
           </div>
         </div>
 
         {/* Summary Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {[
-            { title: "إجمالي المبيعات", value: `${salesReport?.totalSales?.toFixed(3) || "0.000"} د.أ`, icon: DollarSign, color: "bg-primary/10 text-primary" },
-            { title: "عدد الفواتير", value: salesReport?.totalInvoices?.toString() || "0", icon: ShoppingBag, color: "bg-blue-100 text-blue-600" },
-            { title: "متوسط الفاتورة", value: `${salesReport?.averageInvoice?.toFixed(3) || "0.000"} د.أ`, icon: TrendingUp, color: "bg-purple-100 text-purple-600" },
-            { title: "إجمالي المبيعات بالكمية", value: salesReport?.totalItemsSold?.toString() || "0", icon: Package, color: "bg-amber-100 text-amber-600" },
+            { title: "إجمالي المبيعات", value: `${salesReport?.totalSales?.toFixed(3) ?? "0.000"} د.أ`, icon: DollarSign, color: "bg-primary/10 text-primary" },
+            { title: "عدد الفواتير", value: salesReport?.totalInvoices?.toString() ?? "0", icon: ShoppingBag, color: "bg-blue-100 text-blue-600" },
+            { title: "الدفع النقدي", value: `${paymentReport?.cashTotal?.toFixed(3) ?? "0.000"} د.أ`, icon: TrendingUp, color: "bg-purple-100 text-purple-600" },
           ].map(s => (
             <Card key={s.title} className="border-0 shadow-sm rounded-2xl">
               <CardContent className="p-5">
@@ -70,7 +86,10 @@ export default function TenantReports() {
             <CardContent className="p-6">
               <div className="h-[240px]">
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={salesReport?.salesByPeriod || []} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
+                  <AreaChart
+                    data={salesReport?.data ?? []}
+                    margin={{ top: 5, right: 5, left: -20, bottom: 0 }}
+                  >
                     <defs>
                       <linearGradient id="colorSales" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
@@ -81,7 +100,7 @@ export default function TenantReports() {
                     <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
                     <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
                     <Tooltip contentStyle={{ borderRadius: "12px", border: "none", boxShadow: "0 10px 25px -5px rgba(0,0,0,0.1)" }} />
-                    <Area type="monotone" dataKey="total" stroke="hsl(var(--primary))" strokeWidth={2.5} fillOpacity={1} fill="url(#colorSales)" />
+                    <Area type="monotone" dataKey="sales" stroke="hsl(var(--primary))" strokeWidth={2.5} fillOpacity={1} fill="url(#colorSales)" />
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
@@ -104,10 +123,22 @@ export default function TenantReports() {
                         <Cell key={i} fill={COLORS[i % COLORS.length]} />
                       ))}
                     </Pie>
-                    <Tooltip />
+                    <Tooltip formatter={(val: number) => `${val.toFixed(3)} د.أ`} />
                     <Legend />
                   </PieChart>
                 </ResponsiveContainer>
+              )}
+              {paymentReport && (
+                <div className="grid grid-cols-2 gap-3 w-full mt-3">
+                  <div className="text-center p-2 bg-primary/5 rounded-xl">
+                    <p className="text-xs text-muted-foreground">نقدي</p>
+                    <p className="font-bold text-primary">{paymentReport.cashPercent?.toFixed(1)}%</p>
+                  </div>
+                  <div className="text-center p-2 bg-blue-50 rounded-xl">
+                    <p className="text-xs text-muted-foreground">بطاقة</p>
+                    <p className="font-bold text-blue-600">{paymentReport.cardPercent?.toFixed(1)}%</p>
+                  </div>
+                </div>
               )}
             </CardContent>
           </Card>
@@ -119,15 +150,18 @@ export default function TenantReports() {
             <CardTitle className="font-display text-lg">أكثر المنتجات مبيعاً</CardTitle>
           </CardHeader>
           <CardContent className="p-6">
-            {!topProducts?.length ? (
-              <p className="text-muted-foreground text-center py-8">لا توجد بيانات للفترة المحددة</p>
+            {!topProductsChartData.length ? (
+              <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+                <Package className="w-12 h-12 mb-3 opacity-30" />
+                <p>لا توجد بيانات للفترة المحددة</p>
+              </div>
             ) : (
               <div className="h-[200px]">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={topProducts} layout="vertical" margin={{ top: 0, right: 20, left: 0, bottom: 0 }}>
+                  <BarChart data={topProductsChartData} layout="vertical" margin={{ top: 0, right: 20, left: 0, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="hsl(var(--border))" />
                     <XAxis type="number" hide />
-                    <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{ fontSize: 12, fontWeight: 600 }} width={150} />
+                    <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{ fontSize: 12, fontWeight: 600 }} width={160} />
                     <Tooltip contentStyle={{ borderRadius: "8px" }} />
                     <Bar dataKey="quantity" fill="hsl(var(--primary))" radius={[0, 6, 6, 0]} barSize={20} />
                   </BarChart>
@@ -136,6 +170,32 @@ export default function TenantReports() {
             )}
           </CardContent>
         </Card>
+
+        {/* Category Breakdown */}
+        {salesReport?.categoryBreakdown && salesReport.categoryBreakdown.length > 0 && (
+          <Card className="border-0 shadow-sm rounded-2xl">
+            <CardHeader className="border-b border-border/50 pb-4">
+              <CardTitle className="font-display text-lg">المبيعات حسب الفئة</CardTitle>
+            </CardHeader>
+            <CardContent className="p-6">
+              <div className="space-y-3">
+                {salesReport.categoryBreakdown.map((cat) => (
+                  <div key={cat.category} className="flex items-center gap-4">
+                    <span className="text-sm font-bold w-32 shrink-0">{cat.category}</span>
+                    <div className="flex-1 h-3 bg-gray-100 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-primary rounded-full transition-all duration-500"
+                        style={{ width: `${cat.percentage}%` }}
+                      />
+                    </div>
+                    <span className="text-sm font-bold text-primary w-20 text-left">{cat.sales.toFixed(3)} د.أ</span>
+                    <span className="text-xs text-muted-foreground w-12 text-left">{cat.percentage.toFixed(1)}%</span>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </DashboardLayout>
   );
