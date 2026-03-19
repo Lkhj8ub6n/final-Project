@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { eq, and, gte, lte, desc, sql } from "drizzle-orm";
-import { db, invoicesTable, ordersTable, productsTable, notificationsTable } from "@workspace/db";
-import { authenticate, AuthRequest } from "../lib/auth";
+import { db, invoicesTable, ordersTable, productsTable, notificationsTable, tenantsTable } from "@workspace/db";
+import { authenticate, requireRole, type AuthRequest } from "../lib/auth";
 
 const router: IRouter = Router();
 
@@ -102,6 +102,26 @@ router.get("/reports/payment-methods", authenticate as any, async (req: AuthRequ
     cashTotal, cardTotal,
     cashPercent: total > 0 ? (cashTotal / total) * 100 : 0,
     cardPercent: total > 0 ? (cardTotal / total) * 100 : 0,
+  });
+});
+
+// ─── Super Admin: Platform-wide stats ───────────────────────────────────────
+router.get("/super/stats", authenticate as any, requireRole("super_admin") as any, async (_req, res): Promise<void> => {
+  const [allTenants, allOrders, allInvoices] = await Promise.all([
+    db.select({ id: tenantsTable.id, isActive: tenantsTable.isActive }).from(tenantsTable),
+    db.select({ status: ordersTable.status }).from(ordersTable),
+    db.select({ total: invoicesTable.total, status: invoicesTable.status }).from(invoicesTable),
+  ]);
+  const totalRevenue = allInvoices
+    .filter(i => i.status === "active")
+    .reduce((sum, i) => sum + parseFloat(i.total as string), 0);
+  res.json({
+    totalLibraries: allTenants.length,
+    activeLibraries: allTenants.filter(t => t.isActive).length,
+    suspendedLibraries: allTenants.filter(t => !t.isActive).length,
+    totalRevenue,
+    totalStoreOrders: allOrders.length,
+    pendingStoreOrders: allOrders.filter(o => o.status === "new").length,
   });
 });
 
