@@ -7,8 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { BookOpen, Store, MonitorSmartphone, ShieldCheck, Loader2 } from "lucide-react";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { BookOpen, Store, MonitorSmartphone, Loader2 } from "lucide-react";
 
 export default function Login() {
   const [, setLocation] = useLocation();
@@ -18,7 +18,7 @@ export default function Login() {
 
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState<"tenant_admin" | "cashier" | "super_admin">("tenant_admin");
+  const [role, setRole] = useState<"tenant_admin" | "cashier">("tenant_admin");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,17 +34,15 @@ export default function Login() {
       
       login(response.token, response.user);
       
-      // Route based on role
-      if (response.user.role === 'super_admin') setLocation('/admin');
-      else if (response.user.role === 'tenant_admin') setLocation('/dashboard');
+      if (response.user.role === 'tenant_admin') setLocation('/dashboard');
       else if (response.user.role === 'cashier') setLocation('/pos/sell');
       else if (response.user.role === 'student') setLocation(`/store/${response.user.tenantSlug}`);
       
       toast({ title: "مرحباً بك", description: "تم تسجيل الدخول بنجاح" });
-    } catch (error: any) {
+    } catch (error) {
       toast({ 
         title: "فشل تسجيل الدخول", 
-        description: error.message || "تأكد من صحة البيانات المدخلة", 
+        description: error instanceof Error ? error.message : "تأكد من صحة البيانات المدخلة", 
         variant: "destructive" 
       });
     }
@@ -52,7 +50,6 @@ export default function Login() {
 
   return (
     <div className="min-h-screen w-full flex items-center justify-center relative overflow-hidden bg-gray-50">
-      {/* Background Image/Pattern */}
       <div className="absolute inset-0 z-0">
         <img 
           src={`${import.meta.env.BASE_URL}images/login-bg.png`} 
@@ -73,8 +70,8 @@ export default function Login() {
 
         <Card className="border-0 shadow-2xl shadow-black/20 rounded-3xl overflow-hidden glass-card animate-in" style={{ animationDelay: '100ms' }}>
           <CardContent className="p-8">
-            <Tabs defaultValue={role} onValueChange={(v) => setRole(v as any)} className="w-full mb-8">
-              <TabsList className="grid w-full grid-cols-3 bg-muted/50 p-1 rounded-xl h-12">
+            <Tabs defaultValue={role} onValueChange={(v) => setRole(v as "tenant_admin" | "cashier")} className="w-full mb-8">
+              <TabsList className="grid w-full grid-cols-2 bg-muted/50 p-1 rounded-xl h-12">
                 <TabsTrigger value="tenant_admin" className="rounded-lg font-bold data-[state=active]:bg-white data-[state=active]:text-primary data-[state=active]:shadow-sm text-sm">
                   <Store className="w-4 h-4 me-1.5" />
                   المالك
@@ -82,10 +79,6 @@ export default function Login() {
                 <TabsTrigger value="cashier" className="rounded-lg font-bold data-[state=active]:bg-white data-[state=active]:text-primary data-[state=active]:shadow-sm text-sm">
                   <MonitorSmartphone className="w-4 h-4 me-1.5" />
                   كاشير
-                </TabsTrigger>
-                <TabsTrigger value="super_admin" className="rounded-lg font-bold data-[state=active]:bg-white data-[state=active]:text-primary data-[state=active]:shadow-sm text-sm">
-                  <ShieldCheck className="w-4 h-4 me-1.5" />
-                  إدارة
                 </TabsTrigger>
               </TabsList>
             </Tabs>

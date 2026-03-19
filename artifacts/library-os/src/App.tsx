@@ -19,8 +19,6 @@ import TenantStaff from "@/pages/tenant/staff";
 import TenantReports from "@/pages/tenant/reports";
 import TenantNotifications from "@/pages/tenant/notifications";
 import TenantSettings from "@/pages/tenant/settings";
-import SuperAdminDashboard from "@/pages/admin/dashboard";
-import AdminLibraries from "@/pages/admin/libraries";
 import POSSell from "@/pages/pos/sell";
 import StoreHome from "@/pages/store/home";
 import StoreCart from "@/pages/store/cart";
@@ -53,17 +51,6 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={Login} />
-
-      {/* Super Admin */}
-      <Route path="/admin">
-        {() => <ProtectedRoute component={SuperAdminDashboard} allowedRoles={["super_admin"]} />}
-      </Route>
-      <Route path="/admin/dashboard">
-        {() => <ProtectedRoute component={SuperAdminDashboard} allowedRoles={["super_admin"]} />}
-      </Route>
-      <Route path="/admin/libraries">
-        {() => <ProtectedRoute component={AdminLibraries} allowedRoles={["super_admin"]} />}
-      </Route>
 
       {/* Tenant Admin Routes */}
       <Route path="/dashboard">
