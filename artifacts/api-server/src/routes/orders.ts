@@ -18,35 +18,56 @@ async function formatOrder(o: any) {
   };
 }
 
+const requireTenantAdmin = (req: AuthRequest, res: any): boolean => {
+  const role = req.user!.role;
+  if (role !== "tenant_admin" && role !== "super_admin") {
+    res.status(403).json({ error: "Tenant admin access required" });
+    return false;
+  }
+  return true;
+};
+
 router.get("/orders", authenticate as any, async (req: AuthRequest, res): Promise<void> => {
+  if (!requireTenantAdmin(req, res)) return;
   const tenantId = req.user!.tenantId;
   if (!tenantId) { res.status(403).json({ error: "No tenant" }); return; }
-  const { status } = req.query as any;
-  const conditions: any[] = [eq(ordersTable.tenantId, tenantId)];
-  if (status) conditions.push(eq(ordersTable.status, status));
+  const status = typeof req.query.status === "string" ? req.query.status : undefined;
+  const conditions = [
+    eq(ordersTable.tenantId, tenantId),
+    ...(status ? [eq(ordersTable.status, status)] : []),
+  ];
   const orders = await db.select().from(ordersTable).where(and(...conditions)).orderBy(desc(ordersTable.createdAt));
   const result = await Promise.all(orders.map(formatOrder));
   res.json(result);
 });
 
 router.get("/orders/:orderId", authenticate as any, async (req: AuthRequest, res): Promise<void> => {
+  if (!requireTenantAdmin(req, res)) return;
+  const tenantId = req.user!.tenantId;
+  if (!tenantId) { res.status(403).json({ error: "No tenant" }); return; }
   const id = parseInt(Array.isArray(req.params.orderId) ? req.params.orderId[0] : req.params.orderId, 10);
-  const [o] = await db.select().from(ordersTable).where(eq(ordersTable.id, id));
+  const [o] = await db.select().from(ordersTable).where(and(eq(ordersTable.id, id), eq(ordersTable.tenantId, tenantId)));
   if (!o) { res.status(404).json({ error: "Not found" }); return; }
   res.json(await formatOrder(o));
 });
 
 router.patch("/orders/:orderId/status", authenticate as any, async (req: AuthRequest, res): Promise<void> => {
+  if (!requireTenantAdmin(req, res)) return;
+  const tenantId = req.user!.tenantId;
+  if (!tenantId) { res.status(403).json({ error: "No tenant" }); return; }
   const id = parseInt(Array.isArray(req.params.orderId) ? req.params.orderId[0] : req.params.orderId, 10);
-  const { status } = req.body;
-  const [o] = await db.update(ordersTable).set({ status }).where(eq(ordersTable.id, id)).returning();
+  const { status } = req.body as { status: string };
+  const [o] = await db.update(ordersTable).set({ status }).where(and(eq(ordersTable.id, id), eq(ordersTable.tenantId, tenantId))).returning();
   if (!o) { res.status(404).json({ error: "Not found" }); return; }
   res.json(await formatOrder(o));
 });
 
 router.post("/orders/:orderId/cancel", authenticate as any, async (req: AuthRequest, res): Promise<void> => {
+  if (!requireTenantAdmin(req, res)) return;
+  const tenantId = req.user!.tenantId;
+  if (!tenantId) { res.status(403).json({ error: "No tenant" }); return; }
   const id = parseInt(Array.isArray(req.params.orderId) ? req.params.orderId[0] : req.params.orderId, 10);
-  const [o] = await db.update(ordersTable).set({ status: "cancelled" }).where(eq(ordersTable.id, id)).returning();
+  const [o] = await db.update(ordersTable).set({ status: "cancelled" }).where(and(eq(ordersTable.id, id), eq(ordersTable.tenantId, tenantId))).returning();
   if (!o) { res.status(404).json({ error: "Not found" }); return; }
   res.json(await formatOrder(o));
 });
