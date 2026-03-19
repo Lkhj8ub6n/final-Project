@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, gte, lte } from "drizzle-orm";
 import { db, invoicesTable, productsTable, usersTable, notificationsTable, shiftsTable } from "@workspace/db";
 import { authenticate, requireRole, AuthRequest } from "../lib/auth";
 
@@ -17,10 +17,31 @@ function formatInvoice(inv: typeof invoicesTable.$inferSelect, staffName: string
   };
 }
 
-router.get("/invoices", authenticate as any, async (req: AuthRequest, res): Promise<void> => {
+router.get("/invoices", authenticate as never, async (req: AuthRequest, res): Promise<void> => {
   const tenantId = req.user!.tenantId;
   if (!tenantId) { res.status(403).json({ error: "No tenant" }); return; }
-  const invoices = await db.select().from(invoicesTable).where(eq(invoicesTable.tenantId, tenantId)).orderBy(desc(invoicesTable.createdAt));
+
+  const shiftId = req.query.shiftId ? parseInt(req.query.shiftId as string, 10) : undefined;
+  const staffId = req.query.staffId ? parseInt(req.query.staffId as string, 10) : undefined;
+  const paymentMethod = req.query.paymentMethod as string | undefined;
+  const dateFrom = req.query.dateFrom as string | undefined;
+  const dateTo = req.query.dateTo as string | undefined;
+
+  const invoices = await db
+    .select()
+    .from(invoicesTable)
+    .where(
+      and(
+        eq(invoicesTable.tenantId, tenantId),
+        shiftId !== undefined ? eq(invoicesTable.shiftId, shiftId) : undefined,
+        staffId !== undefined ? eq(invoicesTable.staffId, staffId) : undefined,
+        paymentMethod ? eq(invoicesTable.paymentMethod, paymentMethod as "cash" | "card") : undefined,
+        dateFrom ? gte(invoicesTable.createdAt, new Date(dateFrom)) : undefined,
+        dateTo ? lte(invoicesTable.createdAt, new Date(dateTo)) : undefined,
+      ),
+    )
+    .orderBy(desc(invoicesTable.createdAt));
+
   const staffCache: Record<number, string> = {};
   const result = await Promise.all(invoices.map(async (inv) => {
     if (!staffCache[inv.staffId]) {
@@ -32,7 +53,7 @@ router.get("/invoices", authenticate as any, async (req: AuthRequest, res): Prom
   res.json(result);
 });
 
-router.post("/invoices", authenticate as any, async (req: AuthRequest, res): Promise<void> => {
+router.post("/invoices", authenticate as never, async (req: AuthRequest, res): Promise<void> => {
   const tenantId = req.user!.tenantId;
   const staffId = req.user!.id;
   if (!tenantId) { res.status(403).json({ error: "No tenant" }); return; }
@@ -89,7 +110,7 @@ router.post("/invoices", authenticate as any, async (req: AuthRequest, res): Pro
   res.status(201).json(formatInvoice(inv, req.user!.name));
 });
 
-router.get("/invoices/:invoiceId", authenticate as any, async (req: AuthRequest, res): Promise<void> => {
+router.get("/invoices/:invoiceId", authenticate as never, async (req: AuthRequest, res): Promise<void> => {
   const tenantId = req.user!.tenantId;
   if (!tenantId) { res.status(403).json({ error: "No tenant" }); return; }
   const id = parseInt(Array.isArray(req.params.invoiceId) ? req.params.invoiceId[0] : req.params.invoiceId, 10);
@@ -99,7 +120,7 @@ router.get("/invoices/:invoiceId", authenticate as any, async (req: AuthRequest,
   res.json(formatInvoice(inv, u?.name ?? "Unknown"));
 });
 
-router.post("/invoices/:invoiceId/cancel", authenticate as any, requireRole("tenant_admin", "super_admin") as any, async (req: AuthRequest, res): Promise<void> => {
+router.post("/invoices/:invoiceId/cancel", authenticate as never, requireRole("tenant_admin", "super_admin") as never, async (req: AuthRequest, res): Promise<void> => {
   const tenantId = req.user!.tenantId;
   if (!tenantId) { res.status(403).json({ error: "No tenant" }); return; }
   const id = parseInt(Array.isArray(req.params.invoiceId) ? req.params.invoiceId[0] : req.params.invoiceId, 10);
