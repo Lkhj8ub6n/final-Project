@@ -46,7 +46,7 @@ export default function AdminLibraries() {
   ) ?? [];
 
   const handleCreate = async () => {
-    if (!form.name || !form.slug || !form.ownerEmail || !form.ownerPassword) {
+    if (!form.name || !form.slug || !form.ownerName || !form.ownerEmail || !form.ownerPassword) {
       toast({ title: "خطأ", description: "يرجى تعبئة جميع الحقول المطلوبة", variant: "destructive" });
       return;
     }
