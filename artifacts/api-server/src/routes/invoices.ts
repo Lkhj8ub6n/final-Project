@@ -37,13 +37,13 @@ router.post("/invoices", authenticate as any, async (req: AuthRequest, res): Pro
   const staffId = req.user!.id;
   if (!tenantId) { res.status(403).json({ error: "No tenant" }); return; }
   const { shiftId, items, discountAmount, discountPercent, paymentMethod } = req.body as {
-    shiftId?: number;
+    shiftId: number;
     items: Array<{ productId?: number; itemType: string; quantity: number; unitPrice: number; productName?: string }>;
     discountAmount?: number;
     discountPercent?: number;
     paymentMethod: "cash" | "card";
   };
-  if (!items?.length || !paymentMethod) { res.status(400).json({ error: "Missing required fields" }); return; }
+  if (!shiftId || !items?.length || !paymentMethod) { res.status(400).json({ error: "Missing required fields" }); return; }
 
   let subtotal = 0;
   const enrichedItems: Array<Record<string, unknown>> = [];
@@ -52,10 +52,14 @@ router.post("/invoices", authenticate as any, async (req: AuthRequest, res): Pro
     subtotal += lineTotal;
     enrichedItems.push({ ...item, id: Date.now() + Math.random(), discountAmount: 0, total: lineTotal });
     if (item.itemType === "product" && item.productId) {
-      const [prod] = await db.select().from(productsTable).where(eq(productsTable.id, item.productId));
+      const [prod] = await db.select().from(productsTable).where(
+        and(eq(productsTable.id, item.productId), eq(productsTable.tenantId, tenantId))
+      );
       if (prod) {
         const newQty = prod.stockQuantity - item.quantity;
-        await db.update(productsTable).set({ stockQuantity: Math.max(0, newQty) }).where(eq(productsTable.id, item.productId));
+        await db.update(productsTable).set({ stockQuantity: Math.max(0, newQty) }).where(
+          and(eq(productsTable.id, item.productId), eq(productsTable.tenantId, tenantId))
+        );
         if (newQty <= prod.stockAlertThreshold) {
           await db.insert(notificationsTable).values({
             tenantId, type: "low_stock",
@@ -100,9 +104,13 @@ router.post("/invoices/:invoiceId/cancel", authenticate as any, requireRole("ten
   if (inv.items) {
     for (const item of inv.items as Array<{ itemType: string; productId?: number; quantity: number }>) {
       if (item.itemType === "product" && item.productId) {
-        const [prod] = await db.select().from(productsTable).where(eq(productsTable.id, item.productId));
+        const [prod] = await db.select().from(productsTable).where(
+          and(eq(productsTable.id, item.productId), eq(productsTable.tenantId, tenantId))
+        );
         if (prod) {
-          await db.update(productsTable).set({ stockQuantity: prod.stockQuantity + item.quantity }).where(eq(productsTable.id, item.productId));
+          await db.update(productsTable).set({ stockQuantity: prod.stockQuantity + item.quantity }).where(
+            and(eq(productsTable.id, item.productId), eq(productsTable.tenantId, tenantId))
+          );
         }
       }
     }

@@ -261,38 +261,50 @@ ipcMain.handle("invoices:create", async (_event, invoiceData: CreateInvoicePaylo
   const discAmt = discountAmount ?? 0;
   const total = Math.max(0, subtotal - discAmt);
 
-  if (isOnline && authToken) {
-    const serverUrl = getConfig("server_url") ?? "";
-    const res = await fetch(`${serverUrl}/api/invoices`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${authToken}`, "Content-Type": "application/json" },
-      body: JSON.stringify(invoiceData),
+  const saveLocal = (): { id: string; total: number; offline: boolean } => {
+    const currentShift = getCurrentLocalShift();
+    const pending = createPendingInvoice({
+      localShiftId: currentShift?.id ?? null,
+      remoteShiftId: currentShift?.remoteId ?? null,
+      items: items.map((i) => ({
+        productId: i.productId,
+        productName: i.productName,
+        quantity: i.quantity,
+        unitPrice: i.unitPrice,
+        itemType: i.itemType,
+      })),
+      subtotal, discountAmount: discAmt, total, paymentMethod,
     });
-    const data = (await res.json()) as { id?: number; error?: string };
-    if (!res.ok) throw new Error(data.error ?? "Failed to create invoice");
     for (const item of items) {
       if (item.itemType === "product") decrementLocalStock(item.productId, item.quantity);
     }
-    return { ...data, offline: false };
+    return { id: `LOCAL-${pending.id}`, total, offline: true };
+  };
+
+  if (isOnline && authToken) {
+    const serverUrl = getConfig("server_url") ?? "";
+    try {
+      const res = await fetch(`${serverUrl}/api/invoices`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${authToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify(invoiceData),
+      });
+      const data = (await res.json()) as { id?: number; error?: string };
+      if (!res.ok) throw new Error(data.error ?? "Failed to create invoice");
+      for (const item of items) {
+        if (item.itemType === "product") decrementLocalStock(item.productId, item.quantity);
+      }
+      return { ...data, offline: false };
+    } catch {
+      isOnline = false;
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send("connectivity:change", false);
+      }
+      return saveLocal();
+    }
   }
 
-  const currentShift = getCurrentLocalShift();
-  const pending = createPendingInvoice({
-    localShiftId: currentShift?.id ?? null,
-    remoteShiftId: currentShift?.remoteId ?? null,
-    items: items.map((i) => ({
-      productId: i.productId,
-      productName: i.productName,
-      quantity: i.quantity,
-      unitPrice: i.unitPrice,
-      itemType: i.itemType,
-    })),
-    subtotal, discountAmount: discAmt, total, paymentMethod,
-  });
-  for (const item of items) {
-    if (item.itemType === "product") decrementLocalStock(item.productId, item.quantity);
-  }
-  return { id: `LOCAL-${pending.id}`, total, offline: true };
+  return saveLocal();
 });
 
 ipcMain.handle("invoices:pending-count", () => {
