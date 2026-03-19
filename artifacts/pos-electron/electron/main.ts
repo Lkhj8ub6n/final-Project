@@ -10,6 +10,19 @@ import {
 import { syncAll, onSyncStatusChange } from "./sync";
 import { setupAutoUpdater, installUpdate } from "./updater";
 
+interface CreateInvoicePayload {
+  shiftId: number;
+  items: Array<{
+    productId: number;
+    productName: string;
+    quantity: number;
+    unitPrice: number;
+    itemType: string;
+  }>;
+  discountAmount?: number;
+  paymentMethod: "cash" | "card";
+}
+
 const isDev = !app.isPackaged;
 let mainWindow: BrowserWindow | null = null;
 let authToken: string | null = null;
@@ -64,7 +77,7 @@ function createWindow(): void {
     mainWindow.loadURL("http://localhost:5174");
     mainWindow.webContents.openDevTools();
   } else {
-    mainWindow.loadFile(path.join(__dirname, "../renderer/index.html"));
+    mainWindow.loadFile(path.join(app.getAppPath(), "dist/renderer/index.html"));
   }
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -82,6 +95,9 @@ function createWindow(): void {
 }
 
 app.whenReady().then(() => {
+  const storedToken = getConfig("auth_token");
+  if (storedToken) authToken = storedToken;
+
   createWindow();
 
   setInterval(() => { updateConnectivity().catch(() => {}); }, 15_000);
@@ -125,10 +141,13 @@ ipcMain.handle("auth:login", async (_event, username: string, password: string, 
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ username, password, role: "cashier" }),
     });
-    const data = (await res.json()) as any;
+    const data = (await res.json()) as { token?: string; user?: unknown; error?: string };
     if (!res.ok) return { error: data.error ?? "Login failed" };
-    authToken = data.token as string;
-    syncAll(authToken).catch(() => {});
+    authToken = data.token ?? null;
+    if (authToken) {
+      setConfig("auth_token", authToken);
+      syncAll(authToken).catch(() => {});
+    }
     return { user: data.user, token: data.token };
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Cannot reach server" };
@@ -137,6 +156,7 @@ ipcMain.handle("auth:login", async (_event, username: string, password: string, 
 
 ipcMain.handle("auth:logout", () => {
   authToken = null;
+  setConfig("auth_token", "");
 });
 
 ipcMain.handle("products:list", (_event, search?: string) => {
@@ -151,11 +171,12 @@ ipcMain.handle("products:sync", async () => {
       headers: { Authorization: `Bearer ${authToken}` },
     });
     if (!res.ok) return { error: `HTTP ${res.status}` };
-    const data = (await res.json()) as any[];
+    const data = (await res.json()) as Array<{
+      id: number; name: string; barcode?: string; price: string;
+      stockQuantity?: number; stockAlertThreshold?: number; category?: string; isActive?: boolean;
+    }>;
     const products: LocalProduct[] = data.map((p) => ({
-      id: p.id,
-      name: p.name,
-      barcode: p.barcode ?? null,
+      id: p.id, name: p.name, barcode: p.barcode ?? null,
       price: parseFloat(p.price),
       stockQuantity: p.stockQuantity ?? 0,
       stockAlertThreshold: p.stockAlertThreshold ?? 5,
@@ -186,23 +207,19 @@ ipcMain.handle("shifts:current", async () => {
 ipcMain.handle("shifts:open", async (_event, openingBalance: number) => {
   if (isOnline && authToken) {
     const serverUrl = getConfig("server_url") ?? "";
-    try {
-      const res = await fetch(`${serverUrl}/api/shifts/open`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${authToken}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ openingBalance }),
-      });
-      const data = await res.json() as any;
-      if (!res.ok) throw new Error(data.error ?? "Failed");
-      const local = openLocalShift(openingBalance);
-      if (data.id) {
-        const db = (await import("./db")).getDb();
-        db.prepare("UPDATE local_shifts SET remote_id = ?, is_synced = 1 WHERE id = ?").run(data.id, local.id);
-      }
-      return { ...data, localId: local.id };
-    } catch (err) {
-      throw err;
+    const res = await fetch(`${serverUrl}/api/shifts/open`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${authToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ openingBalance }),
+    });
+    const data = (await res.json()) as { id?: number; error?: string };
+    if (!res.ok) throw new Error(data.error ?? "Failed to open shift");
+    const local = openLocalShift(openingBalance);
+    if (data.id) {
+      const { getDb } = await import("./db");
+      getDb().prepare("UPDATE local_shifts SET remote_id = ?, is_synced = 1 WHERE id = ?").run(data.id, local.id);
     }
+    return { ...data, localId: local.id };
   }
   return openLocalShift(openingBalance);
 });
@@ -215,8 +232,8 @@ ipcMain.handle("shifts:close", async (_event, shiftId: number, closingBalance: n
       headers: { Authorization: `Bearer ${authToken}`, "Content-Type": "application/json" },
       body: JSON.stringify({ closingBalance }),
     });
-    const data = await res.json() as any;
-    if (!res.ok) throw new Error(data.error ?? "Failed");
+    const data = (await res.json()) as { error?: string };
+    if (!res.ok) throw new Error(data.error ?? "Failed to close shift");
     return data;
   }
   return closeLocalShift(shiftId, closingBalance);
@@ -233,40 +250,39 @@ ipcMain.handle("shifts:details", async (_event, shiftId: number, isRemote: boole
   return null;
 });
 
-ipcMain.handle("invoices:create", async (_event, invoiceData: any) => {
-  const items = invoiceData.items as Array<{ productId: number; quantity: number; unitPrice: number; productName: string; itemType: string }>;
+ipcMain.handle("invoices:create", async (_event, invoiceData: CreateInvoicePayload) => {
+  const { items, discountAmount, paymentMethod } = invoiceData;
   const subtotal = items.reduce((s, i) => s + i.quantity * i.unitPrice, 0);
-  const discountAmount = invoiceData.discountAmount ?? 0;
-  const total = Math.max(0, subtotal - discountAmount);
+  const discAmt = discountAmount ?? 0;
+  const total = Math.max(0, subtotal - discAmt);
 
   if (isOnline && authToken) {
     const serverUrl = getConfig("server_url") ?? "";
-    try {
-      const res = await fetch(`${serverUrl}/api/invoices`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${authToken}`, "Content-Type": "application/json" },
-        body: JSON.stringify(invoiceData),
-      });
-      const data = await res.json() as any;
-      if (!res.ok) throw new Error(data.error ?? "Failed");
-      for (const item of items) {
-        if (item.itemType === "product") decrementLocalStock(item.productId, item.quantity);
-      }
-      return { ...data, offline: false };
-    } catch (err) {
-      throw err;
+    const res = await fetch(`${serverUrl}/api/invoices`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${authToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify(invoiceData),
+    });
+    const data = (await res.json()) as { id?: number; error?: string };
+    if (!res.ok) throw new Error(data.error ?? "Failed to create invoice");
+    for (const item of items) {
+      if (item.itemType === "product") decrementLocalStock(item.productId, item.quantity);
     }
+    return { ...data, offline: false };
   }
 
   const currentShift = getCurrentLocalShift();
   const pending = createPendingInvoice({
     localShiftId: currentShift?.id ?? null,
     remoteShiftId: currentShift?.remoteId ?? null,
-    items: items.map((i) => ({ productId: i.productId, productName: i.productName, quantity: i.quantity, unitPrice: i.unitPrice, itemType: i.itemType })),
-    subtotal,
-    discountAmount,
-    total,
-    paymentMethod: invoiceData.paymentMethod,
+    items: items.map((i) => ({
+      productId: i.productId,
+      productName: i.productName,
+      quantity: i.quantity,
+      unitPrice: i.unitPrice,
+      itemType: i.itemType,
+    })),
+    subtotal, discountAmount: discAmt, total, paymentMethod,
   });
   for (const item of items) {
     if (item.itemType === "product") decrementLocalStock(item.productId, item.quantity);

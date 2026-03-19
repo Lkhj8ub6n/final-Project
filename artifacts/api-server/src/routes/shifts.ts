@@ -5,11 +5,11 @@ import { authenticate, AuthRequest } from "../lib/auth";
 
 const router: IRouter = Router();
 
-function formatShift(s: any, staffName: string) {
+function formatShift(s: typeof shiftsTable.$inferSelect, staffName: string) {
   return {
     id: s.id, tenantId: s.tenantId, staffId: s.staffId, staffName,
-    openingBalance: parseFloat(s.openingBalance),
-    closingBalance: s.closingBalance ? parseFloat(s.closingBalance) : null,
+    openingBalance: parseFloat(s.openingBalance as string),
+    closingBalance: s.closingBalance ? parseFloat(s.closingBalance as string) : null,
     status: s.status, openedAt: s.openedAt?.toISOString?.() ?? s.openedAt,
     closedAt: s.closedAt?.toISOString?.() ?? null,
   };
@@ -32,13 +32,9 @@ router.post("/shifts/open", authenticate as any, async (req: AuthRequest, res): 
   const tenantId = req.user!.tenantId;
   const staffId = req.user!.id;
   if (!tenantId) { res.status(403).json({ error: "No tenant" }); return; }
-  // Check if already open
   const existing = await db.select().from(shiftsTable).where(and(eq(shiftsTable.staffId, staffId), eq(shiftsTable.status, "open")));
-  if (existing.length > 0) {
-    res.status(400).json({ error: "Shift already open" });
-    return;
-  }
-  const { openingBalance } = req.body;
+  if (existing.length > 0) { res.status(400).json({ error: "Shift already open" }); return; }
+  const { openingBalance } = req.body as { openingBalance: number };
   const [s] = await db.insert(shiftsTable).values({
     tenantId, staffId, openingBalance: openingBalance.toString(), status: "open", openedAt: new Date(),
   }).returning();
@@ -53,22 +49,25 @@ router.get("/shifts/current", authenticate as any, async (req: AuthRequest, res)
 });
 
 router.post("/shifts/:shiftId/close", authenticate as any, async (req: AuthRequest, res): Promise<void> => {
+  const tenantId = req.user!.tenantId;
+  if (!tenantId) { res.status(403).json({ error: "No tenant" }); return; }
   const id = parseInt(Array.isArray(req.params.shiftId) ? req.params.shiftId[0] : req.params.shiftId, 10);
-  const { closingBalance } = req.body;
+  const { closingBalance } = req.body as { closingBalance: number };
   const [s] = await db.update(shiftsTable).set({
     closingBalance: closingBalance.toString(), status: "closed", closedAt: new Date(),
-  }).where(eq(shiftsTable.id, id)).returning();
+  }).where(and(eq(shiftsTable.id, id), eq(shiftsTable.tenantId, tenantId))).returning();
   if (!s) { res.status(404).json({ error: "Not found" }); return; }
   res.json(formatShift(s, req.user!.name));
 });
 
 router.get("/shifts/:shiftId", authenticate as any, async (req: AuthRequest, res): Promise<void> => {
+  const tenantId = req.user!.tenantId;
+  if (!tenantId) { res.status(403).json({ error: "No tenant" }); return; }
   const id = parseInt(Array.isArray(req.params.shiftId) ? req.params.shiftId[0] : req.params.shiftId, 10);
-  const [s] = await db.select().from(shiftsTable).where(eq(shiftsTable.id, id));
+  const [s] = await db.select().from(shiftsTable).where(and(eq(shiftsTable.id, id), eq(shiftsTable.tenantId, tenantId)));
   if (!s) { res.status(404).json({ error: "Not found" }); return; }
   const [user] = await db.select().from(usersTable).where(eq(usersTable.id, s.staffId));
   const staffName = user?.name ?? "Unknown";
-  // Calculate summary
   const invoices = await db.select().from(invoicesTable).where(and(eq(invoicesTable.shiftId, id), eq(invoicesTable.status, "active")));
   const returns_ = await db.select().from(returnsTable).where(eq(returnsTable.invoiceId, s.id));
   const totalSales = invoices.reduce((sum, inv) => sum + parseFloat(inv.total as string), 0);

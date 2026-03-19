@@ -1,17 +1,17 @@
 import { Router, type IRouter } from "express";
-import { eq, and, desc, gte, lte } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
 import { db, invoicesTable, productsTable, usersTable, notificationsTable } from "@workspace/db";
 import { authenticate, requireRole, AuthRequest } from "../lib/auth";
 
 const router: IRouter = Router();
 
-function formatInvoice(inv: any, staffName: string) {
+function formatInvoice(inv: typeof invoicesTable.$inferSelect, staffName: string) {
   return {
     id: inv.id, tenantId: inv.tenantId, shiftId: inv.shiftId, staffId: inv.staffId, staffName,
-    items: inv.items ?? [], subtotal: parseFloat(inv.subtotal),
-    discountAmount: parseFloat(inv.discountAmount ?? "0"),
-    discountPercent: inv.discountPercent ? parseFloat(inv.discountPercent) : null,
-    total: parseFloat(inv.total), paymentMethod: inv.paymentMethod,
+    items: inv.items ?? [], subtotal: parseFloat(inv.subtotal as string),
+    discountAmount: parseFloat((inv.discountAmount ?? "0") as string),
+    discountPercent: inv.discountPercent ? parseFloat(inv.discountPercent as string) : null,
+    total: parseFloat(inv.total as string), paymentMethod: inv.paymentMethod,
     status: inv.status, cancelReason: inv.cancelReason ?? null,
     isSynced: inv.isSynced, createdAt: inv.createdAt?.toISOString?.() ?? inv.createdAt,
   };
@@ -36,23 +36,26 @@ router.post("/invoices", authenticate as any, async (req: AuthRequest, res): Pro
   const tenantId = req.user!.tenantId;
   const staffId = req.user!.id;
   if (!tenantId) { res.status(403).json({ error: "No tenant" }); return; }
-  const { shiftId, items, discountAmount, discountPercent, paymentMethod } = req.body;
+  const { shiftId, items, discountAmount, discountPercent, paymentMethod } = req.body as {
+    shiftId?: number;
+    items: Array<{ productId?: number; itemType: string; quantity: number; unitPrice: number; productName?: string }>;
+    discountAmount?: number;
+    discountPercent?: number;
+    paymentMethod: "cash" | "card";
+  };
   if (!items?.length || !paymentMethod) { res.status(400).json({ error: "Missing required fields" }); return; }
 
-  // Calculate totals and update stock
   let subtotal = 0;
-  const enrichedItems: any[] = [];
+  const enrichedItems: Array<Record<string, unknown>> = [];
   for (const item of items) {
     const lineTotal = item.quantity * item.unitPrice;
     subtotal += lineTotal;
     enrichedItems.push({ ...item, id: Date.now() + Math.random(), discountAmount: 0, total: lineTotal });
-    // Update stock for physical products
     if (item.itemType === "product" && item.productId) {
       const [prod] = await db.select().from(productsTable).where(eq(productsTable.id, item.productId));
       if (prod) {
         const newQty = prod.stockQuantity - item.quantity;
         await db.update(productsTable).set({ stockQuantity: Math.max(0, newQty) }).where(eq(productsTable.id, item.productId));
-        // Check low stock
         if (newQty <= prod.stockAlertThreshold) {
           await db.insert(notificationsTable).values({
             tenantId, type: "low_stock",
@@ -78,21 +81,24 @@ router.post("/invoices", authenticate as any, async (req: AuthRequest, res): Pro
 });
 
 router.get("/invoices/:invoiceId", authenticate as any, async (req: AuthRequest, res): Promise<void> => {
+  const tenantId = req.user!.tenantId;
+  if (!tenantId) { res.status(403).json({ error: "No tenant" }); return; }
   const id = parseInt(Array.isArray(req.params.invoiceId) ? req.params.invoiceId[0] : req.params.invoiceId, 10);
-  const [inv] = await db.select().from(invoicesTable).where(eq(invoicesTable.id, id));
+  const [inv] = await db.select().from(invoicesTable).where(and(eq(invoicesTable.id, id), eq(invoicesTable.tenantId, tenantId)));
   if (!inv) { res.status(404).json({ error: "Not found" }); return; }
   const [u] = await db.select().from(usersTable).where(eq(usersTable.id, inv.staffId));
   res.json(formatInvoice(inv, u?.name ?? "Unknown"));
 });
 
 router.post("/invoices/:invoiceId/cancel", authenticate as any, requireRole("tenant_admin", "super_admin") as any, async (req: AuthRequest, res): Promise<void> => {
+  const tenantId = req.user!.tenantId;
+  if (!tenantId) { res.status(403).json({ error: "No tenant" }); return; }
   const id = parseInt(Array.isArray(req.params.invoiceId) ? req.params.invoiceId[0] : req.params.invoiceId, 10);
-  const { reason } = req.body;
-  const [inv] = await db.update(invoicesTable).set({ status: "cancelled", cancelReason: reason }).where(eq(invoicesTable.id, id)).returning();
+  const { reason } = req.body as { reason?: string };
+  const [inv] = await db.update(invoicesTable).set({ status: "cancelled", cancelReason: reason }).where(and(eq(invoicesTable.id, id), eq(invoicesTable.tenantId, tenantId))).returning();
   if (!inv) { res.status(404).json({ error: "Not found" }); return; }
-  // Restore stock
   if (inv.items) {
-    for (const item of inv.items as any[]) {
+    for (const item of inv.items as Array<{ itemType: string; productId?: number; quantity: number }>) {
       if (item.itemType === "product" && item.productId) {
         const [prod] = await db.select().from(productsTable).where(eq(productsTable.id, item.productId));
         if (prod) {

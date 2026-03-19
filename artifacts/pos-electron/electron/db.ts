@@ -236,6 +236,35 @@ export function markShiftSynced(localId: number, remoteId: number): void {
   stmt.run(remoteId, localId);
 }
 
+export interface UnsyncedShift {
+  id: number;
+  openingBalance: number;
+  closingBalance: number | null;
+  status: "open" | "closed";
+  openedAt: string;
+  closedAt: string | null;
+}
+
+export function getUnsyncedShifts(): UnsyncedShift[] {
+  const db = getDb();
+  const stmt = db.prepare("SELECT * FROM local_shifts WHERE is_synced = 0 ORDER BY id") as StatementSync;
+  const rows = stmt.all() as unknown[];
+  return (rows as any[]).map((row) => ({
+    id: row.id as number,
+    openingBalance: row.opening_balance as number,
+    closingBalance: row.closing_balance as number | null,
+    status: row.status as "open" | "closed",
+    openedAt: row.opened_at as string,
+    closedAt: row.closed_at as string | null,
+  }));
+}
+
+export function updateLocalShiftRemoteId(localId: number, remoteId: number): void {
+  const db = getDb();
+  const stmt = db.prepare("UPDATE local_shifts SET remote_id = ?, is_synced = 1 WHERE id = ?") as StatementSync;
+  stmt.run(remoteId, localId);
+}
+
 export function getPendingInvoiceCount(): number {
   const db = getDb();
   const stmt = db.prepare("SELECT COUNT(*) as count FROM pending_invoices WHERE is_synced = 0") as StatementSync;
