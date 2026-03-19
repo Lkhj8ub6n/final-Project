@@ -93,10 +93,16 @@ export default function StoreHome() {
     }
   };
 
+  const isWrongLibrary = isAuthenticated && !!student?.tenantSlug && student.tenantSlug !== tenantSlug;
+
   const handleAddToCart = (product: StoreProduct) => {
     if (!isAuthenticated) {
       toast({ title: "يجب تسجيل الدخول أولاً", description: "سجّل دخولك لإضافة منتجات للسلة" });
       setAuthMode("login");
+      return;
+    }
+    if (isWrongLibrary) {
+      toast({ title: "لا يمكن الطلب من هذه المكتبة", description: `حسابك مسجّل في مكتبة ${student?.tenantName ?? student?.tenantSlug}`, variant: "destructive" });
       return;
     }
     addItem(product, tenantSlug);
@@ -171,15 +177,25 @@ export default function StoreHome() {
       </header>
 
       <main className="flex-1">
-        {/* Student welcome bar */}
+        {/* Student welcome / wrong-library warning bar */}
         {isAuthenticated && (
-          <div className="bg-primary/5 border-b border-primary/10 px-4 py-2">
-            <div className="max-w-7xl mx-auto flex items-center gap-2 text-sm">
-              <User className="w-4 h-4 text-primary" />
-              <span className="font-bold text-primary">مرحباً {student?.name}</span>
-              <span className="text-muted-foreground">— يمكنك الآن إضافة المنتجات لسلتك وإتمام الطلب</span>
+          isWrongLibrary ? (
+            <div className="bg-destructive/10 border-b border-destructive/20 px-4 py-2">
+              <div className="max-w-7xl mx-auto flex items-center gap-2 text-sm">
+                <User className="w-4 h-4 text-destructive shrink-0" />
+                <span className="font-bold text-destructive">حسابك مسجّل في مكتبة {student?.tenantName ?? student?.tenantSlug}</span>
+                <span className="text-muted-foreground">— لا يمكنك الطلب من هذا المتجر. يمكنك التصفح فقط.</span>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="bg-primary/5 border-b border-primary/10 px-4 py-2">
+              <div className="max-w-7xl mx-auto flex items-center gap-2 text-sm">
+                <User className="w-4 h-4 text-primary" />
+                <span className="font-bold text-primary">مرحباً {student?.name}</span>
+                <span className="text-muted-foreground">— يمكنك الآن إضافة المنتجات لسلتك وإتمام الطلب</span>
+              </div>
+            </div>
+          )
         )}
 
         {/* Categories */}
