@@ -112,6 +112,54 @@ React + Vite frontend for the LibraryOS web app. Includes:
 
 **Seeded data**: superadmin/admin123, ahmed@al-noor.jo/admin123, cashier1/cash123, tenant slug: al-noor
 
+### `artifacts/admin-portal` (`@workspace/admin-portal`)
+
+Standalone React + Vite super-admin portal at `/admin-portal/`. Fully isolated from `library-os`.
+
+- **Auth**: Dark-themed login (no role tabs) — always sends `role: "super_admin"`. Token stored in `localStorage.admin_token`.
+- **Pages**: `dashboard.tsx` (platform stats), `libraries.tsx` (tenant CRUD — create, edit, toggle status)
+- **Layout**: `AdminLayout` with dark sidebar + ShieldCheck icon
+- **Token routing**: `lib/api-client-react/src/custom-fetch.ts` uses path-aware token selection (prefers `admin_token` on `/admin-portal/*` routes)
+
+### `artifacts/pos-electron` (`@workspace/pos-electron`)
+
+Desktop Electron app for cashiers with online/offline support.
+
+**Architecture**:
+- `electron/main.ts` — Main process: BrowserWindow, IPC handlers, connectivity check, sync timer
+- `electron/preload.ts` — Safe IPC bridge via `contextBridge.exposeInMainWorld("electronAPI", ...)`
+- `electron/db.ts` — Local SQLite via Node.js built-in `node:sqlite` (no native compilation needed)
+- `electron/sync.ts` — Syncs pending invoices + product cache when connectivity returns
+- `electron/updater.ts` — Auto-updater via `electron-updater` + GitHub Releases
+
+**Key features**:
+- **Online mode**: Routes IPC calls directly to the remote API server
+- **Offline mode**: Writes invoices to `pending_invoices` queue, reads from local product cache
+- **Auto-sync**: When connectivity returns, pending invoices are pushed to server (server-wins)
+- **Native printing**: Opens silent print window via Electron's `webContents.print()` — no browser dialog
+- **Auto-updater**: Checks GitHub Releases every 4 hours, downloads in background, prompts with "تثبيت الآن"
+- **Connectivity indicator**: Real-time Online/Offline badge in top bar with pending count badge
+
+**Renderer (React + Vite)**:
+- `src/lib/electron-api.ts` — TypeScript interface for `window.electronAPI`
+- `src/lib/auth-context.tsx` — Auth state, persisted in `localStorage.pos_auth`
+- `src/lib/connectivity.tsx` — Connectivity + sync state provider
+- `src/pages/login.tsx` — Configures server URL on first launch, then username+password
+- `src/pages/pos.tsx` — Full POS UI: barcode search, product grid, cart, shift management, checkout
+
+**Build commands** (run locally, not in Replit):
+- `pnpm build:renderer` — builds React app to `dist/renderer/`
+- `pnpm build:main` — compiles main process TypeScript to `dist/main/`
+- `pnpm package:linux` — produces AppImage + deb
+- `pnpm package:win` — produces NSIS installer
+
+**SQLite schema** (in `app.getPath("userData")/pos-local.db`):
+- `config` — key-value store (server_url, etc.)
+- `products` — cached from server, updated on sync
+- `local_shifts` — shift tracking (online or offline)
+- `pending_invoices` — offline invoice queue, synced when online returns
+- `sync_log` — audit log of all sync operations
+
 ### `scripts` (`@workspace/scripts`)
 
 Utility scripts package. Each script is a `.ts` file in `src/` with a corresponding npm script in `package.json`. Run scripts via `pnpm --filter @workspace/scripts run <script>`. Scripts can import any workspace package (e.g., `@workspace/db`) by adding it as a dependency in `scripts/package.json`.
