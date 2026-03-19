@@ -13,11 +13,18 @@ interface InvoiceItemRecord {
   itemType: string;
 }
 
-interface ReturnItemRequest {
+interface ReturnItemRecord {
   productId?: number;
   productName: string;
   quantity: number;
   unitPrice: number;
+}
+
+interface ReturnItemRequest {
+  productId?: number;
+  productName: string;
+  quantity: number;
+  unitPrice?: number;
 }
 
 router.get("/returns", authenticate as never, async (req: AuthRequest, res): Promise<void> => {
@@ -48,7 +55,7 @@ router.post("/returns", authenticate as never, async (req: AuthRequest, res): Pr
     res.status(400).json({ error: "Missing required fields" }); return;
   }
 
-  // Verify the invoice belongs to this tenant
+  // 1. Verify the invoice belongs to this tenant
   const [invoice] = await db.select().from(invoicesTable).where(
     and(eq(invoicesTable.id, invoiceId), eq(invoicesTable.tenantId, tenantId)),
   );
@@ -56,28 +63,72 @@ router.post("/returns", authenticate as never, async (req: AuthRequest, res): Pr
     res.status(404).json({ error: "Invoice not found or does not belong to this tenant" }); return;
   }
 
-  // Validate return items against the original invoice
   const invoiceItems = (invoice.items ?? []) as InvoiceItemRecord[];
-  for (const ri of items) {
-    const matched = invoiceItems.find(
-      (ii) => ri.productId != null
-        ? ii.productId === ri.productId
-        : ii.productName === ri.productName,
-    );
-    if (!matched) {
-      res.status(422).json({ error: `Item "${ri.productName}" not found in original invoice` }); return;
-    }
-    if (ri.quantity <= 0 || ri.quantity > matched.quantity) {
-      res.status(422).json({ error: `Invalid return quantity for "${ri.productName}": max is ${matched.quantity}` }); return;
+
+  // 2. Load all prior returns for this invoice to enforce cumulative limits
+  const priorReturns = await db.select().from(returnsTable).where(
+    eq(returnsTable.invoiceId, invoiceId),
+  );
+  const priorQty: Record<string, number> = {};
+  for (const ret of priorReturns) {
+    for (const ri of (ret.items ?? []) as ReturnItemRecord[]) {
+      const key = ri.productId != null ? `id:${ri.productId}` : `name:${ri.productName}`;
+      priorQty[key] = (priorQty[key] ?? 0) + ri.quantity;
     }
   }
 
-  const totalRefund = items.reduce((sum, i) => sum + i.quantity * i.unitPrice, 0);
+  // 3. Merge duplicate request lines (same product → sum quantities)
+  const merged = new Map<string, ReturnItemRequest & { quantity: number }>();
+  for (const ri of items) {
+    if (!ri.productName || ri.quantity <= 0) continue;
+    const key = ri.productId != null ? `id:${ri.productId}` : `name:${ri.productName}`;
+    const existing = merged.get(key);
+    if (existing) {
+      existing.quantity += ri.quantity;
+    } else {
+      merged.set(key, { ...ri });
+    }
+  }
 
-  // Run everything atomically
+  if (merged.size === 0) {
+    res.status(400).json({ error: "No valid items to return" }); return;
+  }
+
+  // 4. Validate each merged line: existence + quantity (with cumulative check)
+  //    Derive authoritative unit price from the invoice — never trust the client price.
+  const enrichedItems: ReturnItemRecord[] = [];
+  let totalRefund = 0;
+
+  for (const [key, ri] of merged) {
+    const invItem = invoiceItems.find((ii) =>
+      ri.productId != null ? ii.productId === ri.productId : ii.productName === ri.productName,
+    );
+    if (!invItem) {
+      res.status(422).json({ error: `Item "${ri.productName}" not found in original invoice` }); return;
+    }
+
+    const alreadyReturned = priorQty[key] ?? 0;
+    const available = invItem.quantity - alreadyReturned;
+    if (ri.quantity > available) {
+      res.status(422).json({
+        error: `Cannot return ${ri.quantity} of "${ri.productName}": only ${available} unit(s) eligible for return`,
+      }); return;
+    }
+
+    // Use authoritative price from the invoice, not the client-supplied value
+    const authUnitPrice = invItem.unitPrice;
+    totalRefund += ri.quantity * authUnitPrice;
+    enrichedItems.push({
+      productId: invItem.productId ?? undefined,
+      productName: invItem.productName,
+      quantity: ri.quantity,
+      unitPrice: authUnitPrice,
+    });
+  }
+
+  // 5. Run everything atomically
   const result = await db.transaction(async (tx) => {
-    // Restore stock for each returned product using tenant-scoped predicate
-    for (const item of items) {
+    for (const item of enrichedItems) {
       if (item.productId != null) {
         const [prod] = await tx
           .select()
@@ -94,7 +145,13 @@ router.post("/returns", authenticate as never, async (req: AuthRequest, res): Pr
 
     const [r] = await tx
       .insert(returnsTable)
-      .values({ tenantId, invoiceId, staffId, items, totalRefund: totalRefund.toString(), refundMethod, reason })
+      .values({
+        tenantId, invoiceId, staffId,
+        items: enrichedItems,
+        totalRefund: totalRefund.toString(),
+        refundMethod,
+        reason,
+      })
       .returning();
 
     return r;
