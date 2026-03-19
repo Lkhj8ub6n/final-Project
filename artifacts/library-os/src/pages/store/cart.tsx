@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useRoute, useLocation } from "wouter";
 import { useCart } from "@/lib/cart-context";
 import { useStoreAuth } from "@/lib/store-auth-context";
@@ -18,13 +18,19 @@ export default function StoreCart() {
   const { toast } = useToast();
   const tenantSlug = params?.tenantSlug || "";
 
-  const { items, removeItem, updateQuantity, clearCart, totalPrice } = useCart();
+  const { items, tenantSlug: cartSlug, removeItem, updateQuantity, clearCart, totalPrice } = useCart();
   const { isAuthenticated } = useStoreAuth();
   const createOrderMutation = useCreateStoreOrder();
 
   const [notes, setNotes] = useState("");
   const [isSuccess, setIsSuccess] = useState(false);
   const [orderId, setOrderId] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (cartSlug !== null && cartSlug !== tenantSlug) {
+      clearCart();
+    }
+  }, [tenantSlug, cartSlug, clearCart]);
 
   const handleCheckout = async () => {
     if (!isAuthenticated) {

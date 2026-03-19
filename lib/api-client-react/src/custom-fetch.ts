@@ -302,7 +302,11 @@ export async function customFetch<T = unknown>(
   }
 
   if (!headers.has("authorization") && typeof localStorage !== "undefined") {
-    const token = localStorage.getItem("library_token") || localStorage.getItem("store_token");
+    const url = resolveUrl(input);
+    const isStoreRoute = url.includes("/store/") || url.includes("/api/auth/register-student");
+    const token = isStoreRoute
+      ? localStorage.getItem("store_token") || localStorage.getItem("library_token")
+      : localStorage.getItem("library_token") || localStorage.getItem("store_token");
     if (token) {
       headers.set("authorization", `Bearer ${token}`);
     }
