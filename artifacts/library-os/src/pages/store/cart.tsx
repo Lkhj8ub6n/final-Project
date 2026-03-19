@@ -20,7 +20,7 @@ export default function StoreCart() {
 
   const { items, tenantSlug: cartSlug, removeItem, updateQuantity, clearCart, totalPrice } = useCart();
   const { isAuthenticated, student } = useStoreAuth();
-  const isWrongLibrary = isAuthenticated && !!student?.tenantSlug && student.tenantSlug !== tenantSlug;
+  const isEffectivelyAuthenticated = isAuthenticated && !(!!student?.tenantSlug && student.tenantSlug !== tenantSlug);
   const createOrderMutation = useCreateStoreOrder();
 
   const [notes, setNotes] = useState("");
@@ -34,13 +34,9 @@ export default function StoreCart() {
   }, [tenantSlug, cartSlug, clearCart]);
 
   const handleCheckout = async () => {
-    if (!isAuthenticated) {
+    if (!isEffectivelyAuthenticated) {
       toast({ title: "يجب تسجيل الدخول أولاً", variant: "destructive" });
       setLocation(`/store/${tenantSlug}`);
-      return;
-    }
-    if (isWrongLibrary) {
-      toast({ title: "لا يمكن الطلب من هذه المكتبة", description: `حسابك مسجّل في مكتبة ${student?.tenantName ?? student?.tenantSlug}`, variant: "destructive" });
       return;
     }
     if (!items.length) return;
@@ -172,14 +168,6 @@ export default function StoreCart() {
               />
             </div>
 
-            {/* Wrong-library warning */}
-            {isWrongLibrary && (
-              <div className="bg-destructive/10 border border-destructive/20 rounded-2xl p-4">
-                <p className="font-bold text-destructive text-sm">⚠ لا يمكنك الطلب من هذه المكتبة</p>
-                <p className="text-sm text-muted-foreground mt-1">حسابك مسجّل في مكتبة <span className="font-bold">{student?.tenantName ?? student?.tenantSlug}</span>. يرجى زيارة متجر مكتبتك للطلب.</p>
-              </div>
-            )}
-
             {/* Summary */}
             <div className="bg-white rounded-2xl border border-border/50 p-5">
               <div className="space-y-2 mb-4">
@@ -199,7 +187,7 @@ export default function StoreCart() {
               <Button
                 className="w-full h-12 font-bold rounded-xl text-base shadow-lg shadow-primary/20"
                 onClick={handleCheckout}
-                disabled={createOrderMutation.isPending || isWrongLibrary}
+                disabled={createOrderMutation.isPending}
               >
                 {createOrderMutation.isPending ? (
                   <Loader2 className="w-5 h-5 animate-spin" />

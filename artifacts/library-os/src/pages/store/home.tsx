@@ -64,6 +64,14 @@ export default function StoreHome() {
         data: { username: loginForm.phone, password: loginForm.password, role: LoginRequestRole.student },
       });
       const u: UserInfo = res.user;
+      if (u.tenantSlug && u.tenantSlug !== tenantSlug) {
+        toast({
+          title: "هذا الرقم مسجل في مكتبة أخرى",
+          description: "يمكنك إنشاء حساب جديد للطلب من هذه المكتبة",
+          variant: "destructive",
+        });
+        return;
+      }
       storeLogin(res.token, { id: u.id, name: u.name, username: u.username, role: u.role, tenantId: u.tenantId ?? null, tenantName: u.tenantName ?? null, tenantSlug: u.tenantSlug ?? null });
       toast({ title: `مرحباً ${u.name}` });
       setAuthMode(null);
@@ -93,16 +101,14 @@ export default function StoreHome() {
     }
   };
 
+  // Treat students from a different library as visitors (not logged in for this store)
   const isWrongLibrary = isAuthenticated && !!student?.tenantSlug && student.tenantSlug !== tenantSlug;
+  const isEffectivelyAuthenticated = isAuthenticated && !isWrongLibrary;
 
   const handleAddToCart = (product: StoreProduct) => {
-    if (!isAuthenticated) {
+    if (!isEffectivelyAuthenticated) {
       toast({ title: "يجب تسجيل الدخول أولاً", description: "سجّل دخولك لإضافة منتجات للسلة" });
       setAuthMode("login");
-      return;
-    }
-    if (isWrongLibrary) {
-      toast({ title: "لا يمكن الطلب من هذه المكتبة", description: `حسابك مسجّل في مكتبة ${student?.tenantName ?? student?.tenantSlug}`, variant: "destructive" });
       return;
     }
     addItem(product, tenantSlug);
@@ -138,7 +144,7 @@ export default function StoreHome() {
             </div>
 
             <div className="flex items-center gap-2 shrink-0">
-              {isAuthenticated ? (
+              {isEffectivelyAuthenticated ? (
                 <>
                   <Button variant="ghost" size="sm" className="hidden sm:flex items-center gap-2 font-bold text-sm rounded-full" onClick={() => setLocation(`/store/${tenantSlug}/my-orders`)}>
                     <Package className="w-4 h-4" /> طلباتي
@@ -177,25 +183,15 @@ export default function StoreHome() {
       </header>
 
       <main className="flex-1">
-        {/* Student welcome / wrong-library warning bar */}
-        {isAuthenticated && (
-          isWrongLibrary ? (
-            <div className="bg-destructive/10 border-b border-destructive/20 px-4 py-2">
-              <div className="max-w-7xl mx-auto flex items-center gap-2 text-sm">
-                <User className="w-4 h-4 text-destructive shrink-0" />
-                <span className="font-bold text-destructive">حسابك مسجّل في مكتبة {student?.tenantName ?? student?.tenantSlug}</span>
-                <span className="text-muted-foreground">— لا يمكنك الطلب من هذا المتجر. يمكنك التصفح فقط.</span>
-              </div>
+        {/* Student welcome bar */}
+        {isEffectivelyAuthenticated && (
+          <div className="bg-primary/5 border-b border-primary/10 px-4 py-2">
+            <div className="max-w-7xl mx-auto flex items-center gap-2 text-sm">
+              <User className="w-4 h-4 text-primary" />
+              <span className="font-bold text-primary">مرحباً {student?.name}</span>
+              <span className="text-muted-foreground">— يمكنك الآن إضافة المنتجات لسلتك وإتمام الطلب</span>
             </div>
-          ) : (
-            <div className="bg-primary/5 border-b border-primary/10 px-4 py-2">
-              <div className="max-w-7xl mx-auto flex items-center gap-2 text-sm">
-                <User className="w-4 h-4 text-primary" />
-                <span className="font-bold text-primary">مرحباً {student?.name}</span>
-                <span className="text-muted-foreground">— يمكنك الآن إضافة المنتجات لسلتك وإتمام الطلب</span>
-              </div>
-            </div>
-          )
+          </div>
         )}
 
         {/* Categories */}
