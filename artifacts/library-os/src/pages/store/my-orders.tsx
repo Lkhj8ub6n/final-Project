@@ -1,13 +1,12 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { useRoute, useLocation } from "wouter";
-import { useGetMyOrders } from "@workspace/api-client-react";
 import { useStoreAuth } from "@/lib/store-auth-context";
 import { Button } from "@/components/ui/button";
+import type { Order } from "@workspace/api-client-react";
 import {
   ArrowRight, Package, ShoppingBag, Clock,
   CheckCircle2, Truck, XCircle, RefreshCw
 } from "lucide-react";
-
 import type { LucideIcon } from "lucide-react";
 
 const statusMap: Record<string, { label: string; color: string; icon: LucideIcon }> = {
@@ -23,8 +22,26 @@ export default function StoreMyOrders() {
   const [, setLocation] = useLocation();
   const tenantSlug = params?.tenantSlug || "";
 
-  const { isAuthenticated, student } = useStoreAuth();
-  const { data: orders, isLoading } = useGetMyOrders({ query: { enabled: isAuthenticated } });
+  const { isAuthenticated, student, token } = useStoreAuth();
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isAuthenticated || !tenantSlug || !token) return;
+    setIsLoading(true);
+    setError(null);
+    fetch(`/api/store/${tenantSlug}/my-orders`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(r => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json() as Promise<Order[]>;
+      })
+      .then(data => { setOrders(data); })
+      .catch(err => { setError((err as Error).message); })
+      .finally(() => { setIsLoading(false); });
+  }, [isAuthenticated, tenantSlug, token]);
 
   if (!match) return null;
 
@@ -62,6 +79,12 @@ export default function StoreMyOrders() {
           <p className="text-sm text-muted-foreground">مرحباً <span className="font-bold text-foreground">{student.name}</span> — إليك سجل طلباتك</p>
         )}
 
+        {error && (
+          <div className="bg-destructive/10 text-destructive rounded-xl p-4 text-sm font-bold">
+            خطأ في تحميل الطلبات: {error}
+          </div>
+        )}
+
         {isLoading ? (
           <div className="space-y-4">
             {Array(3).fill(0).map((_, i) => (
@@ -72,7 +95,7 @@ export default function StoreMyOrders() {
               </div>
             ))}
           </div>
-        ) : !orders?.length ? (
+        ) : !orders.length ? (
           <div className="bg-white rounded-2xl border border-border/50 p-16 text-center">
             <ShoppingBag className="w-16 h-16 mx-auto mb-4 text-muted-foreground opacity-30" />
             <p className="text-xl font-bold mb-2">لا توجد طلبات بعد</p>
@@ -83,7 +106,7 @@ export default function StoreMyOrders() {
           </div>
         ) : (
           orders.map(order => {
-            const status = statusMap[order.status] ?? statusMap.new;
+            const status = statusMap[order.status] ?? statusMap["new"];
             const StatusIcon = status.icon;
             return (
               <div key={order.id} className="bg-white rounded-2xl border border-border/50 shadow-sm overflow-hidden">

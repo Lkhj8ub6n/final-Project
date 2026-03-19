@@ -99,6 +99,9 @@ router.post("/store/:tenantSlug/orders", authenticate as any, async (req: AuthRe
   const studentId = req.user!.id;
   const [tenant] = await db.select().from(tenantsTable).where(eq(tenantsTable.slug, tenantSlug));
   if (!tenant) { res.status(404).json({ error: "Library not found" }); return; }
+  if (req.user!.tenantId !== tenant.id) {
+    res.status(403).json({ error: "You can only place orders at your registered library" }); return;
+  }
   const { items, notes } = req.body;
   if (!items?.length) { res.status(400).json({ error: "No items" }); return; }
 
@@ -132,6 +135,22 @@ router.get("/store/my-orders", authenticate as any, async (req: AuthRequest, res
   if (req.user!.role !== "student") { res.status(403).json({ error: "Only students can access their orders" }); return; }
   const studentId = req.user!.id;
   const orders = await db.select().from(ordersTable).where(eq(ordersTable.studentId, studentId)).orderBy(desc(ordersTable.createdAt));
+  const result = await Promise.all(orders.map(formatOrder));
+  res.json(result);
+});
+
+router.get("/store/:tenantSlug/my-orders", authenticate as any, async (req: AuthRequest, res): Promise<void> => {
+  if (req.user!.role !== "student") { res.status(403).json({ error: "Only students can access their orders" }); return; }
+  const tenantSlug = Array.isArray(req.params.tenantSlug) ? req.params.tenantSlug[0] : req.params.tenantSlug;
+  const [tenant] = await db.select().from(tenantsTable).where(eq(tenantsTable.slug, tenantSlug));
+  if (!tenant) { res.status(404).json({ error: "Library not found" }); return; }
+  if (req.user!.tenantId !== tenant.id) {
+    res.status(403).json({ error: "You can only view orders from your registered library" }); return;
+  }
+  const studentId = req.user!.id;
+  const orders = await db.select().from(ordersTable)
+    .where(and(eq(ordersTable.studentId, studentId), eq(ordersTable.tenantId, tenant.id)))
+    .orderBy(desc(ordersTable.createdAt));
   const result = await Promise.all(orders.map(formatOrder));
   res.json(result);
 });

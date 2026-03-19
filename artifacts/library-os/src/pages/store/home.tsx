@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useRoute, useLocation } from "wouter";
-import { useListStoreProducts, useRegisterStudent, useLogin, LoginRequestRole, type UserInfo } from "@workspace/api-client-react";
+import { useListStoreProducts, useRegisterStudent, useLogin, LoginRequestRole, type UserInfo, type StoreProduct } from "@workspace/api-client-react";
 import { useStoreAuth } from "@/lib/store-auth-context";
 import { useCart } from "@/lib/cart-context";
 import { Button } from "@/components/ui/button";
@@ -93,7 +93,7 @@ export default function StoreHome() {
     }
   };
 
-  const handleAddToCart = (product: any) => {
+  const handleAddToCart = (product: StoreProduct) => {
     if (!isAuthenticated) {
       toast({ title: "يجب تسجيل الدخول أولاً", description: "سجّل دخولك لإضافة منتجات للسلة" });
       setAuthMode("login");
@@ -142,9 +142,14 @@ export default function StoreHome() {
                   </Button>
                 </>
               ) : (
-                <Button variant="outline" size="sm" className="rounded-full font-bold" onClick={() => setAuthMode("login")}>
-                  <LogIn className="w-4 h-4 me-1" /> دخول
-                </Button>
+                <>
+                  <Button variant="ghost" size="sm" className="rounded-full font-bold hidden sm:flex" onClick={() => setAuthMode("register")}>
+                    تسجيل
+                  </Button>
+                  <Button variant="outline" size="sm" className="rounded-full font-bold" onClick={() => setAuthMode("login")}>
+                    <LogIn className="w-4 h-4 me-1" /> دخول
+                  </Button>
+                </>
               )}
 
               <Button
