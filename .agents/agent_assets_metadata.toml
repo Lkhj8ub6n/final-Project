@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "83lCj7EvL0S6GXS3rbGKk"
+uri = "file://artifacts/pos-electron/release/libraryos-pos-linux.tar.gz"
+type = "unspecified"
+title = "LibraryOS POS - Linux"

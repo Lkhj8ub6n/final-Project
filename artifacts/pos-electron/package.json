@@ -46,9 +46,11 @@
       "package.json"
     ],
     "extraResources": [],
+    "executableName": "libraryos-pos",
     "linux": {
       "target": ["AppImage", "deb"],
-      "category": "Office"
+      "category": "Office",
+      "executableName": "libraryos-pos"
     },
     "win": {
       "target": ["nsis"]

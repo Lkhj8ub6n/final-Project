@@ -1,0 +1,4 @@
+owner: libraryos
+repo: pos-releases
+provider: github
+updaterCacheDirName: '@workspacepos-electron-updater'

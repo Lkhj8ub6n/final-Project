@@ -1,0 +1,2 @@
+artifacts/pos-electron/release/libraryos-pos-linux.tar.gz filter=lfs diff=lfs merge=lfs -text
+artifacts/pos-electron/release/linux-unpacked/libraryos-pos filter=lfs diff=lfs merge=lfs -text
