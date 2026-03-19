@@ -105,14 +105,32 @@ router.post("/store/:tenantSlug/orders", authenticate as any, async (req: AuthRe
   const { items, notes } = req.body;
   if (!items?.length) { res.status(400).json({ error: "No items" }); return; }
 
+  interface OrderItemInput { productId: number; quantity: number; }
+  interface EnrichedItem { id: number; productId: number; productName: string; quantity: number; unitPrice: number; total: number; }
+
   let total = 0;
-  const enrichedItems: any[] = [];
-  for (const item of items) {
-    const [p] = await db.select().from(productsTable).where(eq(productsTable.id, item.productId));
-    if (!p) { res.status(400).json({ error: `Product ${item.productId} not found` }); return; }
-    const lineTotal = parseFloat(p.price as string) * item.quantity;
+  const enrichedItems: EnrichedItem[] = [];
+  for (const item of items as OrderItemInput[]) {
+    const qty = Number(item.quantity);
+    if (!Number.isInteger(qty) || qty <= 0) {
+      res.status(400).json({ error: `Invalid quantity for product ${item.productId}` }); return;
+    }
+    const [p] = await db.select().from(productsTable).where(
+      and(
+        eq(productsTable.id, item.productId),
+        eq(productsTable.tenantId, tenant.id),
+        eq(productsTable.isActive, true),
+        eq(productsTable.showInStore, true),
+      )
+    );
+    if (!p) { res.status(400).json({ error: `Product ${item.productId} not found or unavailable` }); return; }
+    if (p.stockQuantity < qty) {
+      res.status(400).json({ error: `Insufficient stock for "${p.name}" (available: ${p.stockQuantity})` }); return;
+    }
+    const unitPrice = parseFloat(p.price as string);
+    const lineTotal = unitPrice * qty;
     total += lineTotal;
-    enrichedItems.push({ id: Date.now() + Math.random(), productId: p.id, productName: p.name, quantity: item.quantity, unitPrice: parseFloat(p.price as string), total: lineTotal });
+    enrichedItems.push({ id: Math.floor(Date.now() + Math.random() * 1e6), productId: p.id, productName: p.name, quantity: qty, unitPrice, total: lineTotal });
   }
 
   const [o] = await db.insert(ordersTable).values({
