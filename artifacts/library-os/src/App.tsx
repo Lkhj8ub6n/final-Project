@@ -3,6 +3,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/lib/auth-context";
+import { StoreAuthProvider } from "@/lib/store-auth-context";
+import { CartProvider } from "@/lib/cart-context";
 import NotFound from "@/pages/not-found";
 
 // Pages
@@ -19,6 +21,8 @@ import TenantSettings from "@/pages/tenant/settings";
 import SuperAdminDashboard from "@/pages/admin/dashboard";
 import POSSell from "@/pages/pos/sell";
 import StoreHome from "@/pages/store/home";
+import StoreCart from "@/pages/store/cart";
+import StoreMyOrders from "@/pages/store/my-orders";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -87,8 +91,10 @@ function Router() {
         {() => <ProtectedRoute component={POSSell} allowedRoles={["cashier", "tenant_admin"]} />}
       </Route>
 
-      {/* Store Routes (Public) */}
+      {/* Store Routes */}
       <Route path="/store/:tenantSlug" component={StoreHome} />
+      <Route path="/store/:tenantSlug/cart" component={StoreCart} />
+      <Route path="/store/:tenantSlug/my-orders" component={StoreMyOrders} />
 
       <Route component={NotFound} />
     </Switch>
@@ -99,12 +105,16 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <TooltipProvider>
-          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-            <Router />
-          </WouterRouter>
-          <Toaster />
-        </TooltipProvider>
+        <StoreAuthProvider>
+          <CartProvider>
+            <TooltipProvider>
+              <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+                <Router />
+              </WouterRouter>
+              <Toaster />
+            </TooltipProvider>
+          </CartProvider>
+        </StoreAuthProvider>
       </AuthProvider>
     </QueryClientProvider>
   );

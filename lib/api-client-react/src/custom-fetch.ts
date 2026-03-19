@@ -302,7 +302,7 @@ export async function customFetch<T = unknown>(
   }
 
   if (!headers.has("authorization") && typeof localStorage !== "undefined") {
-    const token = localStorage.getItem("library_token");
+    const token = localStorage.getItem("library_token") || localStorage.getItem("store_token");
     if (token) {
       headers.set("authorization", `Bearer ${token}`);
     }

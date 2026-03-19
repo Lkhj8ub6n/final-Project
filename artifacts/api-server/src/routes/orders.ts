@@ -52,6 +52,13 @@ router.post("/orders/:orderId/cancel", authenticate as any, async (req: AuthRequ
 });
 
 // Store routes
+router.get("/store/:tenantSlug/info", async (req, res): Promise<void> => {
+  const tenantSlug = Array.isArray(req.params.tenantSlug) ? req.params.tenantSlug[0] : req.params.tenantSlug;
+  const [tenant] = await db.select().from(tenantsTable).where(eq(tenantsTable.slug, tenantSlug));
+  if (!tenant) { res.status(404).json({ error: "Library not found" }); return; }
+  res.json({ name: tenant.name, address: tenant.address ?? null, phone: tenant.phone ?? null, slug: tenant.slug });
+});
+
 router.get("/store/:tenantSlug/products", async (req, res): Promise<void> => {
   const tenantSlug = Array.isArray(req.params.tenantSlug) ? req.params.tenantSlug[0] : req.params.tenantSlug;
   const [tenant] = await db.select().from(tenantsTable).where(eq(tenantsTable.slug, tenantSlug));

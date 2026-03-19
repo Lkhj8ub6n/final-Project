@@ -91,6 +91,27 @@ Generated Zod schemas from the OpenAPI spec (e.g. `HealthCheckResponse`). Used b
 
 Generated React Query hooks and fetch client from the OpenAPI spec (e.g. `useHealthCheck`, `healthCheck`).
 
+### `artifacts/library-os` (`@workspace/library-os`)
+
+React + Vite frontend for the LibraryOS web app. Includes:
+- Tenant Admin dashboard (products, cards, staff, discounts, reports, orders, print-services, settings)
+- Super Admin dashboard
+- Cashier POS (sell, shift management)
+- Student-facing Online Store at `/store/:tenantSlug`
+
+**Auth**: Token in `localStorage.library_token` for admin/cashier; `localStorage.store_token` for students. Both are sent via `customFetch` as `Bearer` header.
+
+**Store pages**:
+- `/store/:tenantSlug` — Home (products grid, category filter, auth modal)
+- `/store/:tenantSlug/cart` — Cart (item management, checkout, success page)
+- `/store/:tenantSlug/my-orders` — Student order history
+
+**Contexts**:
+- `StoreAuthProvider` (`src/lib/store-auth-context.tsx`) — manages student session via `store_token`
+- `CartProvider` (`src/lib/cart-context.tsx`) — local cart state (React Context, not persisted)
+
+**Seeded data**: superadmin/admin123, ahmed@al-noor.jo/admin123, cashier1/cash123, tenant slug: al-noor
+
 ### `scripts` (`@workspace/scripts`)
 
 Utility scripts package. Each script is a `.ts` file in `src/` with a corresponding npm script in `package.json`. Run scripts via `pnpm --filter @workspace/scripts run <script>`. Scripts can import any workspace package (e.g., `@workspace/db`) by adding it as a dependency in `scripts/package.json`.
