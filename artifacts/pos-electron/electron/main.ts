@@ -198,10 +198,15 @@ ipcMain.handle("shifts:current", async () => {
         headers: { Authorization: `Bearer ${authToken}` },
       });
       if (res.status === 404) return null;
-      if (res.ok) return await res.json();
+      if (res.ok) {
+        const data = (await res.json()) as Record<string, unknown>;
+        return { ...data, source: "remote" };
+      }
     } catch {}
   }
-  return getCurrentLocalShift();
+  const localShift = getCurrentLocalShift();
+  if (!localShift) return null;
+  return { ...localShift, source: "local" };
 });
 
 ipcMain.handle("shifts:open", async (_event, openingBalance: number) => {
@@ -219,9 +224,9 @@ ipcMain.handle("shifts:open", async (_event, openingBalance: number) => {
       const { getDb } = await import("./db");
       getDb().prepare("UPDATE local_shifts SET remote_id = ?, is_synced = 1 WHERE id = ?").run(data.id, local.id);
     }
-    return { ...data, localId: local.id };
+    return { ...data, source: "remote", localId: local.id };
   }
-  return openLocalShift(openingBalance);
+  return { ...openLocalShift(openingBalance), source: "local" };
 });
 
 ipcMain.handle("shifts:close", async (_event, shiftId: number, closingBalance: number, isRemote: boolean) => {

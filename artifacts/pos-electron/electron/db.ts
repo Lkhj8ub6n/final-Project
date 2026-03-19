@@ -76,6 +76,86 @@ function migrate(db: DatabaseSync): void {
   `);
 }
 
+interface ProductRow {
+  id: number;
+  name: string;
+  barcode: string | null;
+  price: number;
+  stock_quantity: number;
+  stock_alert_threshold: number;
+  category: string | null;
+  is_active: number;
+}
+
+interface ShiftRow {
+  id: number;
+  remote_id: number | null;
+  opening_balance: number;
+  closing_balance: number | null;
+  status: string;
+  opened_at: string;
+  closed_at: string | null;
+  is_synced: number;
+}
+
+interface PendingInvoiceRow {
+  id: number;
+  local_shift_id: number | null;
+  remote_shift_id: number | null;
+  items: string;
+  subtotal: number;
+  discount_amount: number;
+  total: number;
+  payment_method: string;
+  created_at: string;
+  is_synced: number;
+  remote_id: number | null;
+  sync_error: string | null;
+}
+
+function mapProduct(row: ProductRow): LocalProduct {
+  return {
+    id: row.id,
+    name: row.name,
+    barcode: row.barcode,
+    price: row.price,
+    stockQuantity: row.stock_quantity,
+    stockAlertThreshold: row.stock_alert_threshold,
+    category: row.category,
+    isActive: row.is_active === 1,
+  };
+}
+
+function mapShift(row: ShiftRow): LocalShift {
+  return {
+    id: row.id,
+    remoteId: row.remote_id,
+    openingBalance: row.opening_balance,
+    closingBalance: row.closing_balance,
+    status: row.status === "open" ? "open" : "closed",
+    openedAt: row.opened_at,
+    closedAt: row.closed_at,
+    isSynced: row.is_synced === 1,
+  };
+}
+
+function mapPendingInvoice(row: PendingInvoiceRow): PendingInvoice {
+  return {
+    id: row.id,
+    localShiftId: row.local_shift_id,
+    remoteShiftId: row.remote_shift_id,
+    items: JSON.parse(row.items) as InvoiceItem[],
+    subtotal: row.subtotal,
+    discountAmount: row.discount_amount,
+    total: row.total,
+    paymentMethod: row.payment_method === "cash" ? "cash" : "card",
+    createdAt: row.created_at,
+    isSynced: row.is_synced === 1,
+    remoteId: row.remote_id,
+    syncError: row.sync_error,
+  };
+}
+
 export function getConfig(key: string): string | null {
   const db = getDb();
   const stmt = db.prepare("SELECT value FROM config WHERE key = ?") as StatementSync;
@@ -136,15 +216,15 @@ export interface InvoiceItem {
 
 export function getLocalProducts(search?: string): LocalProduct[] {
   const db = getDb();
-  let rows: unknown[];
+  let rows: ProductRow[];
   if (search) {
     const stmt = db.prepare("SELECT * FROM products WHERE is_active = 1 AND (name LIKE ? OR barcode = ?) ORDER BY name LIMIT 200") as StatementSync;
-    rows = stmt.all(`%${search}%`, search) as unknown[];
+    rows = stmt.all(`%${search}%`, search) as unknown as ProductRow[];
   } else {
     const stmt = db.prepare("SELECT * FROM products WHERE is_active = 1 ORDER BY name LIMIT 200") as StatementSync;
-    rows = stmt.all() as unknown[];
+    rows = stmt.all() as unknown as ProductRow[];
   }
-  return (rows as any[]).map(mapProduct);
+  return rows.map(mapProduct);
 }
 
 export function upsertProducts(products: LocalProduct[]): void {
@@ -168,7 +248,7 @@ export function decrementLocalStock(productId: number, quantity: number): void {
 export function getCurrentLocalShift(): LocalShift | null {
   const db = getDb();
   const stmt = db.prepare("SELECT * FROM local_shifts WHERE status = 'open' ORDER BY id DESC LIMIT 1") as StatementSync;
-  const row = stmt.get() as any;
+  const row = stmt.get() as unknown as ShiftRow | undefined;
   return row ? mapShift(row) : null;
 }
 
@@ -177,7 +257,7 @@ export function openLocalShift(openingBalance: number): LocalShift {
   const stmt = db.prepare("INSERT INTO local_shifts (opening_balance, status) VALUES (?, 'open')") as StatementSync;
   const result = stmt.run(openingBalance);
   const getStmt = db.prepare("SELECT * FROM local_shifts WHERE id = ?") as StatementSync;
-  const row = getStmt.get(Number(result.lastInsertRowid)) as any;
+  const row = getStmt.get(Number(result.lastInsertRowid)) as unknown as ShiftRow;
   return mapShift(row);
 }
 
@@ -186,7 +266,7 @@ export function closeLocalShift(id: number, closingBalance: number): LocalShift 
   const stmt = db.prepare("UPDATE local_shifts SET closing_balance = ?, status = 'closed', closed_at = datetime('now') WHERE id = ?") as StatementSync;
   stmt.run(closingBalance, id);
   const getStmt = db.prepare("SELECT * FROM local_shifts WHERE id = ?") as StatementSync;
-  const row = getStmt.get(id) as any;
+  const row = getStmt.get(id) as unknown as ShiftRow;
   return mapShift(row);
 }
 
@@ -207,15 +287,15 @@ export function createPendingInvoice(data: Omit<PendingInvoice, "id" | "createdA
     data.paymentMethod,
   );
   const getStmt = db.prepare("SELECT * FROM pending_invoices WHERE id = ?") as StatementSync;
-  const row = getStmt.get(Number(result.lastInsertRowid)) as any;
+  const row = getStmt.get(Number(result.lastInsertRowid)) as unknown as PendingInvoiceRow;
   return mapPendingInvoice(row);
 }
 
 export function getPendingInvoices(): PendingInvoice[] {
   const db = getDb();
   const stmt = db.prepare("SELECT * FROM pending_invoices WHERE is_synced = 0 ORDER BY created_at") as StatementSync;
-  const rows = stmt.all() as unknown[];
-  return (rows as any[]).map(mapPendingInvoice);
+  const rows = stmt.all() as unknown as PendingInvoiceRow[];
+  return rows.map(mapPendingInvoice);
 }
 
 export function markInvoiceSynced(id: number, remoteId: number): void {
@@ -248,14 +328,14 @@ export interface UnsyncedShift {
 export function getUnsyncedShifts(): UnsyncedShift[] {
   const db = getDb();
   const stmt = db.prepare("SELECT * FROM local_shifts WHERE is_synced = 0 ORDER BY id") as StatementSync;
-  const rows = stmt.all() as unknown[];
-  return (rows as any[]).map((row) => ({
-    id: row.id as number,
-    openingBalance: row.opening_balance as number,
-    closingBalance: row.closing_balance as number | null,
-    status: row.status as "open" | "closed",
-    openedAt: row.opened_at as string,
-    closedAt: row.closed_at as string | null,
+  const rows = stmt.all() as unknown as ShiftRow[];
+  return rows.map((row) => ({
+    id: row.id,
+    openingBalance: row.opening_balance,
+    closingBalance: row.closing_balance,
+    status: row.status === "open" ? "open" : "closed",
+    openedAt: row.opened_at,
+    closedAt: row.closed_at,
   }));
 }
 
@@ -276,47 +356,4 @@ export function addSyncLog(action: string, entity: string, entityId: number | nu
   const db = getDb();
   const stmt = db.prepare("INSERT INTO sync_log (action, entity, entity_id, success, message) VALUES (?, ?, ?, ?, ?)") as StatementSync;
   stmt.run(action, entity, entityId ?? null, success ? 1 : 0, message ?? null);
-}
-
-function mapProduct(row: any): LocalProduct {
-  return {
-    id: row.id as number,
-    name: row.name as string,
-    barcode: row.barcode as string | null,
-    price: row.price as number,
-    stockQuantity: row.stock_quantity as number,
-    stockAlertThreshold: row.stock_alert_threshold as number,
-    category: row.category as string | null,
-    isActive: row.is_active === 1,
-  };
-}
-
-function mapShift(row: any): LocalShift {
-  return {
-    id: row.id as number,
-    remoteId: row.remote_id as number | null,
-    openingBalance: row.opening_balance as number,
-    closingBalance: row.closing_balance as number | null,
-    status: row.status as "open" | "closed",
-    openedAt: row.opened_at as string,
-    closedAt: row.closed_at as string | null,
-    isSynced: row.is_synced === 1,
-  };
-}
-
-function mapPendingInvoice(row: any): PendingInvoice {
-  return {
-    id: row.id as number,
-    localShiftId: row.local_shift_id as number | null,
-    remoteShiftId: row.remote_shift_id as number | null,
-    items: JSON.parse(row.items as string) as InvoiceItem[],
-    subtotal: row.subtotal as number,
-    discountAmount: row.discount_amount as number,
-    total: row.total as number,
-    paymentMethod: row.payment_method as "cash" | "card",
-    createdAt: row.created_at as string,
-    isSynced: row.is_synced === 1,
-    remoteId: row.remote_id as number | null,
-    syncError: row.sync_error as string | null,
-  };
 }

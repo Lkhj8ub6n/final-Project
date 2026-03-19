@@ -62,7 +62,7 @@ export default function POS() {
       const s = await window.electronAPI.getCurrentShift();
       setCurrentShift(s as Shift | null);
       if (s) {
-        const det = await window.electronAPI.getShiftDetails((s as Shift).id, !(s as any).isSynced === false);
+        const det = await window.electronAPI.getShiftDetails((s as Shift).id, (s as Shift).source === "remote");
         setShiftDetails(det as Shift | null);
       }
     } finally {
@@ -127,7 +127,7 @@ export default function POS() {
   const handleCloseShift = async () => {
     if (!currentShift) return;
     try {
-      const isRemote = !!(currentShift as any).staffId;
+      const isRemote = currentShift.source === "remote";
       await window.electronAPI.closeShift(currentShift.id, parseFloat(closingBalance) || 0, isRemote);
       setCurrentShift(null);
       setShiftDetails(null);

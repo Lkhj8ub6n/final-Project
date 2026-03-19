@@ -9,15 +9,16 @@ export interface Product {
   isActive: boolean;
 }
 
+export type ShiftSource = "remote" | "local";
+
 export interface Shift {
   id: number;
-  remoteId?: number | null;
+  source: ShiftSource;
   openingBalance: number;
   closingBalance?: number | null;
   status: "open" | "closed";
   openedAt: string;
   closedAt?: string | null;
-  isSynced?: boolean;
   staffName?: string;
   totalInvoices?: number;
   totalSales?: number;
