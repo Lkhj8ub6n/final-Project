@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq, and, desc } from "drizzle-orm";
-import { db, invoicesTable, productsTable, usersTable, notificationsTable } from "@workspace/db";
+import { db, invoicesTable, productsTable, usersTable, notificationsTable, shiftsTable } from "@workspace/db";
 import { authenticate, requireRole, AuthRequest } from "../lib/auth";
 
 const router: IRouter = Router();
@@ -44,6 +44,11 @@ router.post("/invoices", authenticate as any, async (req: AuthRequest, res): Pro
     paymentMethod: "cash" | "card";
   };
   if (!shiftId || !items?.length || !paymentMethod) { res.status(400).json({ error: "Missing required fields" }); return; }
+
+  const [shift] = await db.select().from(shiftsTable).where(
+    and(eq(shiftsTable.id, shiftId), eq(shiftsTable.tenantId, tenantId))
+  );
+  if (!shift) { res.status(403).json({ error: "Invalid or unauthorized shift" }); return; }
 
   let subtotal = 0;
   const enrichedItems: Array<Record<string, unknown>> = [];

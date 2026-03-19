@@ -68,7 +68,7 @@ router.get("/shifts/:shiftId", authenticate as any, async (req: AuthRequest, res
   if (!s) { res.status(404).json({ error: "Not found" }); return; }
   const [user] = await db.select().from(usersTable).where(eq(usersTable.id, s.staffId));
   const staffName = user?.name ?? "Unknown";
-  const invoices = await db.select().from(invoicesTable).where(and(eq(invoicesTable.shiftId, id), eq(invoicesTable.status, "active")));
+  const invoices = await db.select().from(invoicesTable).where(and(eq(invoicesTable.shiftId, id), eq(invoicesTable.tenantId, tenantId), eq(invoicesTable.status, "active")));
   const returns_ = await db.select().from(returnsTable).where(eq(returnsTable.invoiceId, s.id));
   const totalSales = invoices.reduce((sum, inv) => sum + parseFloat(inv.total as string), 0);
   const cashSales = invoices.filter(i => i.paymentMethod === "cash").reduce((sum, i) => sum + parseFloat(i.total as string), 0);

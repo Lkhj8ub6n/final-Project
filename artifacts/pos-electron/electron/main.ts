@@ -239,6 +239,8 @@ ipcMain.handle("shifts:close", async (_event, shiftId: number, closingBalance: n
     });
     const data = (await res.json()) as { error?: string };
     if (!res.ok) throw new Error(data.error ?? "Failed to close shift");
+    const localMirror = getCurrentLocalShift();
+    if (localMirror) closeLocalShift(localMirror.id, closingBalance);
     return data;
   }
   return closeLocalShift(shiftId, closingBalance);
@@ -283,18 +285,13 @@ ipcMain.handle("invoices:create", async (_event, invoiceData: CreateInvoicePaylo
 
   if (isOnline && authToken) {
     const serverUrl = getConfig("server_url") ?? "";
+    let res: Response;
     try {
-      const res = await fetch(`${serverUrl}/api/invoices`, {
+      res = await fetch(`${serverUrl}/api/invoices`, {
         method: "POST",
         headers: { Authorization: `Bearer ${authToken}`, "Content-Type": "application/json" },
         body: JSON.stringify(invoiceData),
       });
-      const data = (await res.json()) as { id?: number; error?: string };
-      if (!res.ok) throw new Error(data.error ?? "Failed to create invoice");
-      for (const item of items) {
-        if (item.itemType === "product") decrementLocalStock(item.productId, item.quantity);
-      }
-      return { ...data, offline: false };
     } catch {
       isOnline = false;
       if (mainWindow && !mainWindow.isDestroyed()) {
@@ -302,6 +299,12 @@ ipcMain.handle("invoices:create", async (_event, invoiceData: CreateInvoicePaylo
       }
       return saveLocal();
     }
+    const data = (await res.json()) as { id?: number; error?: string };
+    if (!res.ok) throw new Error(data.error ?? "Failed to create invoice");
+    for (const item of items) {
+      if (item.itemType === "product") decrementLocalStock(item.productId, item.quantity);
+    }
+    return { ...data, offline: false };
   }
 
   return saveLocal();
