@@ -25,7 +25,7 @@ export default function StoreHome() {
   const { toast } = useToast();
   const tenantSlug = params?.tenantSlug || "";
 
-  const { student, login: storeLogin, logout: storeLogout, isAuthenticated } = useStoreAuth();
+  const { student, login: storeLogin, logout: storeLogout, isAuthenticated, isLoading: authLoading } = useStoreAuth();
   const { addItem, totalItems } = useCart();
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -99,7 +99,7 @@ export default function StoreHome() {
       setAuthMode("login");
       return;
     }
-    addItem(product);
+    addItem(product, tenantSlug);
     toast({ title: "تمت الإضافة للسلة", description: product.name });
   };
 
@@ -141,7 +141,7 @@ export default function StoreHome() {
                     <LogOut className="w-4 h-4" />
                   </Button>
                 </>
-              ) : (
+              ) : !authLoading ? (
                 <>
                   <Button variant="ghost" size="sm" className="rounded-full font-bold hidden sm:flex" onClick={() => setAuthMode("register")}>
                     تسجيل
@@ -150,7 +150,7 @@ export default function StoreHome() {
                     <LogIn className="w-4 h-4 me-1" /> دخول
                   </Button>
                 </>
-              )}
+              ) : null}
 
               <Button
                 size="sm"

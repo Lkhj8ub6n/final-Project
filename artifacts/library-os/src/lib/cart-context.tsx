@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback } from "react";
+import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
 
 export interface CartItem {
   productId: number;
@@ -14,6 +14,7 @@ interface AddableProduct {
   id: number;
   name: string;
   price: number;
+  discountedPrice?: number | null;
   imageUrl?: string | null;
   category: string;
   stockQuantity: number;
@@ -21,7 +22,8 @@ interface AddableProduct {
 
 interface CartContextType {
   items: CartItem[];
-  addItem: (product: AddableProduct) => void;
+  tenantSlug: string | null;
+  addItem: (product: AddableProduct, slug: string) => void;
   removeItem: (productId: number) => void;
   updateQuantity: (productId: number, quantity: number) => void;
   clearCart: () => void;
@@ -33,9 +35,24 @@ const CartContext = createContext<CartContextType | undefined>(undefined);
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([]);
+  const [tenantSlug, setTenantSlug] = useState<string | null>(null);
 
-  const addItem = useCallback((product: AddableProduct) => {
+  const addItem = useCallback((product: AddableProduct, slug: string) => {
     setItems(prev => {
+      if (tenantSlug !== null && tenantSlug !== slug) {
+        return [
+          {
+            productId: product.id,
+            name: product.name,
+            price: product.discountedPrice ?? product.price,
+            quantity: 1,
+            stockQuantity: product.stockQuantity,
+            imageUrl: product.imageUrl,
+            category: product.category,
+          },
+        ];
+      }
+
       const existing = prev.find(i => i.productId === product.id);
       if (existing) {
         if (existing.quantity >= product.stockQuantity) return prev;
@@ -48,7 +65,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         {
           productId: product.id,
           name: product.name,
-          price: product.price,
+          price: product.discountedPrice ?? product.price,
           quantity: 1,
           stockQuantity: product.stockQuantity,
           imageUrl: product.imageUrl,
@@ -56,33 +73,44 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         },
       ];
     });
-  }, []);
+    setTenantSlug(slug);
+  }, [tenantSlug]);
 
   const removeItem = useCallback((productId: number) => {
-    setItems(prev => prev.filter(i => i.productId !== productId));
+    setItems(prev => {
+      const next = prev.filter(i => i.productId !== productId);
+      if (next.length === 0) setTenantSlug(null);
+      return next;
+    });
   }, []);
 
   const updateQuantity = useCallback((productId: number, quantity: number) => {
     if (quantity <= 0) {
-      setItems(prev => prev.filter(i => i.productId !== productId));
+      setItems(prev => {
+        const next = prev.filter(i => i.productId !== productId);
+        if (next.length === 0) setTenantSlug(null);
+        return next;
+      });
     } else {
       setItems(prev =>
         prev.map(i => {
           if (i.productId !== productId) return i;
-          const capped = Math.min(quantity, i.stockQuantity);
-          return { ...i, quantity: capped };
+          return { ...i, quantity: Math.min(quantity, i.stockQuantity) };
         })
       );
     }
   }, []);
 
-  const clearCart = useCallback(() => setItems([]), []);
+  const clearCart = useCallback(() => {
+    setItems([]);
+    setTenantSlug(null);
+  }, []);
 
   const totalItems = items.reduce((sum, i) => sum + i.quantity, 0);
   const totalPrice = items.reduce((sum, i) => sum + i.price * i.quantity, 0);
 
   return (
-    <CartContext.Provider value={{ items, addItem, removeItem, updateQuantity, clearCart, totalItems, totalPrice }}>
+    <CartContext.Provider value={{ items, tenantSlug, addItem, removeItem, updateQuantity, clearCart, totalItems, totalPrice }}>
       {children}
     </CartContext.Provider>
   );
