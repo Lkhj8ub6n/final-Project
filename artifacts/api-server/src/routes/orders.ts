@@ -1,24 +1,24 @@
-import { Router, type IRouter } from "express";
+import { Router, type IRouter, type Response } from "express";
 import { eq, and, desc } from "drizzle-orm";
-import { db, ordersTable, productsTable, usersTable, tenantsTable, notificationsTable } from "@workspace/db";
+import { db, ordersTable, productsTable, usersTable, tenantsTable, notificationsTable, type Order as DbOrder } from "@workspace/db";
 import { authenticate, AuthRequest } from "../lib/auth";
 
 const router: IRouter = Router();
 
-async function formatOrder(o: any) {
+async function formatOrder(o: DbOrder) {
   const [student] = await db.select().from(usersTable).where(eq(usersTable.id, o.studentId));
   return {
     id: o.id, tenantId: o.tenantId, studentId: o.studentId,
     studentName: student?.name ?? "Unknown",
     studentPhone: student?.phone ?? "",
-    items: o.items ?? [], total: parseFloat(o.total),
+    items: (o.items as unknown[]) ?? [], total: parseFloat(o.total as string),
     status: o.status, notes: o.notes ?? null,
-    createdAt: o.createdAt?.toISOString?.() ?? o.createdAt,
-    updatedAt: o.updatedAt?.toISOString?.() ?? o.updatedAt,
+    createdAt: o.createdAt instanceof Date ? o.createdAt.toISOString() : o.createdAt,
+    updatedAt: o.updatedAt instanceof Date ? o.updatedAt.toISOString() : o.updatedAt,
   };
 }
 
-const requireTenantAdmin = (req: AuthRequest, res: any): boolean => {
+const requireTenantAdmin = (req: AuthRequest, res: Response): boolean => {
   const role = req.user!.role;
   if (role !== "tenant_admin" && role !== "super_admin") {
     res.status(403).json({ error: "Tenant admin access required" });

@@ -45,8 +45,9 @@ export default function StoreCart() {
       setOrderId(order.id);
       setIsSuccess(true);
       clearCart();
-    } catch (e: any) {
-      toast({ title: "خطأ في إرسال الطلب", description: e.message, variant: "destructive" });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "حدث خطأ غير متوقع";
+      toast({ title: "خطأ في إرسال الطلب", description: msg, variant: "destructive" });
     }
   };
 
@@ -128,7 +129,9 @@ export default function StoreCart() {
                       <span className="font-bold w-6 text-center">{item.quantity}</span>
                       <Button
                         variant="outline" size="icon" className="w-8 h-8 rounded-lg"
+                        disabled={item.quantity >= item.stockQuantity}
                         onClick={() => updateQuantity(item.productId, item.quantity + 1)}
+                        title={item.quantity >= item.stockQuantity ? `الحد الأقصى المتاح: ${item.stockQuantity}` : undefined}
                       >
                         <Plus className="w-3 h-3" />
                       </Button>

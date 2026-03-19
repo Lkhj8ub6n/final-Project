@@ -5,13 +5,23 @@ export interface CartItem {
   name: string;
   price: number;
   quantity: number;
+  stockQuantity: number;
   imageUrl?: string | null;
   category: string;
 }
 
+interface AddableProduct {
+  id: number;
+  name: string;
+  price: number;
+  imageUrl?: string | null;
+  category: string;
+  stockQuantity: number;
+}
+
 interface CartContextType {
   items: CartItem[];
-  addItem: (product: { id: number; name: string; price: number; imageUrl?: string | null; category: string; stockQuantity: number }) => void;
+  addItem: (product: AddableProduct) => void;
   removeItem: (productId: number) => void;
   updateQuantity: (productId: number, quantity: number) => void;
   clearCart: () => void;
@@ -24,14 +34,27 @@ const CartContext = createContext<CartContextType | undefined>(undefined);
 export function CartProvider({ children }: { children: React.ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([]);
 
-  const addItem = useCallback((product: { id: number; name: string; price: number; imageUrl?: string | null; category: string; stockQuantity: number }) => {
+  const addItem = useCallback((product: AddableProduct) => {
     setItems(prev => {
       const existing = prev.find(i => i.productId === product.id);
       if (existing) {
         if (existing.quantity >= product.stockQuantity) return prev;
-        return prev.map(i => i.productId === product.id ? { ...i, quantity: i.quantity + 1 } : i);
+        return prev.map(i =>
+          i.productId === product.id ? { ...i, quantity: i.quantity + 1 } : i
+        );
       }
-      return [...prev, { productId: product.id, name: product.name, price: product.price, quantity: 1, imageUrl: product.imageUrl, category: product.category }];
+      return [
+        ...prev,
+        {
+          productId: product.id,
+          name: product.name,
+          price: product.price,
+          quantity: 1,
+          stockQuantity: product.stockQuantity,
+          imageUrl: product.imageUrl,
+          category: product.category,
+        },
+      ];
     });
   }, []);
 
@@ -43,7 +66,13 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     if (quantity <= 0) {
       setItems(prev => prev.filter(i => i.productId !== productId));
     } else {
-      setItems(prev => prev.map(i => i.productId === productId ? { ...i, quantity } : i));
+      setItems(prev =>
+        prev.map(i => {
+          if (i.productId !== productId) return i;
+          const capped = Math.min(quantity, i.stockQuantity);
+          return { ...i, quantity: capped };
+        })
+      );
     }
   }, []);
 
