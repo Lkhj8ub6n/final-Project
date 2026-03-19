@@ -198,7 +198,11 @@ export default function POSSell() {
   const handleCheckout = async () => {
     if (cart.length === 0) return;
     if (!currentShift) { setIsOpenShiftOpen(true); return; }
-    if (paymentMethod === "cash" && paidAmount && parseFloat(paidAmount) < total) {
+    if (paymentMethod === "cash" && !paidAmount) {
+      toast({ title: "أدخل المبلغ المدفوع من العميل", variant: "destructive" });
+      return;
+    }
+    if (paymentMethod === "cash" && parseFloat(paidAmount) < total) {
       toast({ title: "المبلغ المدفوع أقل من الإجمالي", variant: "destructive" });
       return;
     }
@@ -275,6 +279,9 @@ export default function POSSell() {
   };
 
   // ─── Returns ───────────────────────────────────────────────────────────────
+  // Direct fetch is used here (rather than useGetInvoice hook) because
+  // the invoice ID is not known at render time — it's entered by the cashier
+  // on demand. React hooks cannot be called conditionally inside event handlers.
   const fetchInvoiceForReturn = async () => {
     const id = parseInt(returnInvoiceId, 10);
     if (!id) return;
