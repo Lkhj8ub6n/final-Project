@@ -63,9 +63,19 @@ router.get("/store/:tenantSlug/products", async (req, res): Promise<void> => {
   const tenantSlug = Array.isArray(req.params.tenantSlug) ? req.params.tenantSlug[0] : req.params.tenantSlug;
   const [tenant] = await db.select().from(tenantsTable).where(eq(tenantsTable.slug, tenantSlug));
   if (!tenant) { res.status(404).json({ error: "Library not found" }); return; }
-  const { category, search } = req.query as any;
-  const conditions: any[] = [eq(productsTable.tenantId, tenant.id), eq(productsTable.showInStore, true), eq(productsTable.isActive, true)];
-  const products = await db.select().from(productsTable).where(and(...conditions));
+  const category = typeof req.query.category === "string" ? req.query.category : undefined;
+  const search = typeof req.query.search === "string" ? req.query.search : undefined;
+  const baseConditions = [
+    eq(productsTable.tenantId, tenant.id),
+    eq(productsTable.showInStore, true),
+    eq(productsTable.isActive, true),
+    ...(category ? [eq(productsTable.category, category)] : []),
+  ];
+  let products = await db.select().from(productsTable).where(and(...baseConditions));
+  if (search) {
+    const q = search.toLowerCase();
+    products = products.filter(p => p.name.toLowerCase().includes(q) || p.category.toLowerCase().includes(q));
+  }
   res.json(products.map(p => ({
     id: p.id, name: p.name, category: p.category, price: parseFloat(p.price as string),
     discountedPrice: null, imageUrl: p.imageUrl ?? null,
@@ -84,6 +94,7 @@ router.get("/store/:tenantSlug/products/:productId", async (req, res): Promise<v
 });
 
 router.post("/store/:tenantSlug/orders", authenticate as any, async (req: AuthRequest, res): Promise<void> => {
+  if (req.user!.role !== "student") { res.status(403).json({ error: "Only students can place store orders" }); return; }
   const tenantSlug = Array.isArray(req.params.tenantSlug) ? req.params.tenantSlug[0] : req.params.tenantSlug;
   const studentId = req.user!.id;
   const [tenant] = await db.select().from(tenantsTable).where(eq(tenantsTable.slug, tenantSlug));
@@ -118,6 +129,7 @@ router.post("/store/:tenantSlug/orders", authenticate as any, async (req: AuthRe
 });
 
 router.get("/store/my-orders", authenticate as any, async (req: AuthRequest, res): Promise<void> => {
+  if (req.user!.role !== "student") { res.status(403).json({ error: "Only students can access their orders" }); return; }
   const studentId = req.user!.id;
   const orders = await db.select().from(ordersTable).where(eq(ordersTable.studentId, studentId)).orderBy(desc(ordersTable.createdAt));
   const result = await Promise.all(orders.map(formatOrder));

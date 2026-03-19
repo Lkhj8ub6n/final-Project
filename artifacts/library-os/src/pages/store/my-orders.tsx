@@ -8,7 +8,9 @@ import {
   CheckCircle2, Truck, XCircle, RefreshCw
 } from "lucide-react";
 
-const statusMap: Record<string, { label: string; color: string; icon: any }> = {
+import type { LucideIcon } from "lucide-react";
+
+const statusMap: Record<string, { label: string; color: string; icon: LucideIcon }> = {
   new:       { label: "جديد — في الانتظار", color: "bg-amber-100 text-amber-700 border-amber-200", icon: Clock },
   preparing: { label: "قيد التجهيز", color: "bg-blue-100 text-blue-700 border-blue-200", icon: RefreshCw },
   ready:     { label: "جاهز للاستلام", color: "bg-green-100 text-green-700 border-green-200", icon: CheckCircle2 },
@@ -22,7 +24,7 @@ export default function StoreMyOrders() {
   const tenantSlug = params?.tenantSlug || "";
 
   const { isAuthenticated, student } = useStoreAuth();
-  const { data: orders, isLoading } = useGetMyOrders({ query: { enabled: isAuthenticated } as any });
+  const { data: orders, isLoading } = useGetMyOrders({ query: { enabled: isAuthenticated } });
 
   if (!match) return null;
 

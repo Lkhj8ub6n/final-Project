@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useRoute, useLocation } from "wouter";
-import { useListStoreProducts, useRegisterStudent, useLogin, LoginRequestRole } from "@workspace/api-client-react";
+import { useListStoreProducts, useRegisterStudent, useLogin, LoginRequestRole, type UserInfo } from "@workspace/api-client-react";
 import { useStoreAuth } from "@/lib/store-auth-context";
 import { useCart } from "@/lib/cart-context";
 import { Button } from "@/components/ui/button";
@@ -63,11 +63,12 @@ export default function StoreHome() {
       const res = await loginMutation.mutateAsync({
         data: { username: loginForm.phone, password: loginForm.password, role: LoginRequestRole.student },
       });
-      storeLogin(res.token, res.user as any);
-      toast({ title: `مرحباً ${res.user.name}` });
+      const u: UserInfo = res.user;
+      storeLogin(res.token, { id: u.id, name: u.name, username: u.username, role: u.role, tenantId: u.tenantId ?? null, tenantName: u.tenantName ?? null, tenantSlug: u.tenantSlug ?? null });
+      toast({ title: `مرحباً ${u.name}` });
       setAuthMode(null);
       setLoginForm({ phone: "", password: "" });
-    } catch (e: any) {
+    } catch {
       toast({ title: "فشل تسجيل الدخول", description: "تأكد من رقم الهاتف وكلمة المرور", variant: "destructive" });
     }
   };
@@ -82,12 +83,13 @@ export default function StoreHome() {
       const res = await registerMutation.mutateAsync({
         data: { fullName: regForm.fullName, phone: regForm.phone, password: regForm.password, tenantSlug },
       });
-      storeLogin(res.token, res.user as any);
-      toast({ title: "تم إنشاء الحساب", description: `مرحباً ${res.user.name}!` });
+      const u: UserInfo = res.user;
+      storeLogin(res.token, { id: u.id, name: u.name, username: u.username, role: u.role, tenantId: u.tenantId ?? null, tenantName: u.tenantName ?? null, tenantSlug: u.tenantSlug ?? null });
+      toast({ title: "تم إنشاء الحساب", description: `مرحباً ${u.name}!` });
       setAuthMode(null);
       setRegForm({ fullName: "", phone: "", password: "", confirmPassword: "" });
-    } catch (e: any) {
-      toast({ title: "خطأ", description: e.message, variant: "destructive" });
+    } catch {
+      toast({ title: "خطأ في التسجيل", description: "تأكد من البيانات المدخلة", variant: "destructive" });
     }
   };
 
