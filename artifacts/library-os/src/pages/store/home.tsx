@@ -65,11 +65,7 @@ export default function StoreHome() {
       });
       const u: UserInfo = res.user;
       if (u.tenantSlug && u.tenantSlug !== tenantSlug) {
-        toast({
-          title: "هذا الرقم مسجل في مكتبة أخرى",
-          description: "يمكنك إنشاء حساب جديد للطلب من هذه المكتبة",
-          variant: "destructive",
-        });
+        toast({ title: "فشل تسجيل الدخول", description: "تأكد من رقم الهاتف وكلمة المرور", variant: "destructive" });
         return;
       }
       storeLogin(res.token, { id: u.id, name: u.name, username: u.username, role: u.role, tenantId: u.tenantId ?? null, tenantName: u.tenantName ?? null, tenantSlug: u.tenantSlug ?? null });
