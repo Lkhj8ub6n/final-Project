@@ -304,9 +304,19 @@ export async function customFetch<T = unknown>(
   if (!headers.has("authorization") && typeof localStorage !== "undefined") {
     const url = resolveUrl(input);
     const isStoreRoute = url.includes("/store/") || url.includes("/api/auth/register-student");
-    const token = isStoreRoute
-      ? localStorage.getItem("store_token") || localStorage.getItem("library_token")
-      : localStorage.getItem("library_token") || localStorage.getItem("admin_token") || localStorage.getItem("store_token");
+    const isAdminPortal =
+      typeof window !== "undefined" && window.location.pathname.startsWith("/admin-portal");
+    let token: string | null;
+    if (isStoreRoute) {
+      token =
+        localStorage.getItem("store_token") || localStorage.getItem("library_token");
+    } else if (isAdminPortal) {
+      token =
+        localStorage.getItem("admin_token") || localStorage.getItem("library_token");
+    } else {
+      token =
+        localStorage.getItem("library_token") || localStorage.getItem("store_token");
+    }
     if (token) {
       headers.set("authorization", `Bearer ${token}`);
     }
