@@ -25,6 +25,7 @@ const tenantNavItems: NavItem[] = [
   { title: "خدمات الطباعة", href: "/dashboard/print-services", icon: Printer },
   { title: "الموظفين", href: "/dashboard/staff", icon: Users },
   { title: "التقارير", href: "/dashboard/reports", icon: FileText },
+  { title: "الإشعارات", href: "/dashboard/notifications", icon: Bell },
   { title: "الإعدادات", href: "/dashboard/settings", icon: Settings },
 ];
 

@@ -17,6 +17,7 @@ import TenantDiscounts from "@/pages/tenant/discounts";
 import TenantPrintServices from "@/pages/tenant/print-services";
 import TenantStaff from "@/pages/tenant/staff";
 import TenantReports from "@/pages/tenant/reports";
+import TenantNotifications from "@/pages/tenant/notifications";
 import TenantSettings from "@/pages/tenant/settings";
 import SuperAdminDashboard from "@/pages/admin/dashboard";
 import AdminLibraries from "@/pages/admin/libraries";
@@ -88,6 +89,9 @@ function Router() {
       </Route>
       <Route path="/dashboard/reports">
         {() => <ProtectedRoute component={TenantReports} allowedRoles={["tenant_admin"]} />}
+      </Route>
+      <Route path="/dashboard/notifications">
+        {() => <ProtectedRoute component={TenantNotifications} allowedRoles={["tenant_admin"]} />}
       </Route>
       <Route path="/dashboard/settings">
         {() => <ProtectedRoute component={TenantSettings} allowedRoles={["tenant_admin"]} />}
