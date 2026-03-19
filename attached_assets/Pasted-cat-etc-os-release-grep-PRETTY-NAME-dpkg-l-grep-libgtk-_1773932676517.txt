@@ -1,0 +1,27 @@
+cat /etc/os-release | grep PRETTY_NAME
+dpkg -l | grep libgtk 2>/dev/null || rpm -qa | grep gtk 2>/dev/null
+ldd ./libraryos-pos | grep gtk
+PRETTY_NAME="Zorin OS 18"
+ii  libgtk-3-0t64:amd64                                      3.24.41-4ubuntu1.3                        amd64        GTK graphical user interface library
+ii  libgtk-3-0t64:i386                                       3.24.41-4ubuntu1.3                        i386         GTK graphical user interface library
+ii  libgtk-3-bin                                             3.24.41-4ubuntu1.3                        amd64        programs for the GTK graphical user interface library
+ii  libgtk-3-common                                          3.24.41-4ubuntu1.3                        all          common files for the GTK graphical user interface library
+ii  libgtk-4-1:amd64                                         4.14.5+ds-0ubuntu0.9                      amd64        GTK graphical user interface library
+ii  libgtk-4-bin                                             4.14.5+ds-0ubuntu0.9                      amd64        programs for the GTK graphical user interface library
+ii  libgtk-4-common                                          4.14.5+ds-0ubuntu0.9                      all          common files for the GTK graphical user interface library
+ii  libgtk-4-media-gstreamer                                 4.14.5+ds-0ubuntu0.9                      amd64        GStreamer media backend for the GTK graphical user interface library
+ii  libgtk-layer-shell0                                      0.8.2-1build2                             amd64        Wayland Layer Shell protocol desktop component library
+ii  libgtk2.0-0t64:amd64                                     2.24.33-4ubuntu1.1                        amd64        GTK graphical user interface library - old version
+ii  libgtk2.0-bin                                            2.24.33-4ubuntu1.1                        amd64        programs for the GTK graphical user interface library
+ii  libgtk2.0-common                                         2.24.33-4ubuntu1.1                        all          common files for the GTK graphical user interface library
+ii  libgtk3-perl                                             0.038-3                                   all          Perl bindings for the GTK+ graphical user interface library
+ii  libgtk3.0-cil                                            2.99.3-4.1build2                          amd64        CLI binding for the GTK+ 3.0 toolkit
+ii  libgtkmm-3.0-1t64:amd64                                  3.24.9-1                                  amd64        C++ wrappers for GTK+ (shared libraries)
+ii  libgtkmm-4.0-0:amd64                                     4.10.0-4build3                            amd64        C++ wrappers for GTK4 (shared libraries)
+ii  libgtksourceview-3.0-1:amd64                             3.24.11-2build4                           amd64        shared libraries for the GTK+ syntax highlighting widget
+ii  libgtksourceview-3.0-common                              3.24.11-2build4                           all          common files for the GTK+ syntax highlighting widget
+ii  libgtksourceview-4-0:amd64                               4.8.4-5build4                             amd64        shared libraries for the GTK+ syntax highlighting widget
+ii  libgtksourceview-4-common                                4.8.4-5build4                             all          common files for the GTK+ syntax highlighting widget
+ii  libgtksourceview-5-0:amd64                               5.12.0-1build1                            amd64        shared libraries for the GTK 4 syntax highlighting widget
+ii  libgtksourceview-5-common                                5.12.0-1build1                            all          common files for the GTK 4 syntax highlighting widget
+ldd: ./libraryos-pos: No such file or directory
