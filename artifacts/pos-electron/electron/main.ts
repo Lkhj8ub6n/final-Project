@@ -73,14 +73,19 @@ function createWindow(): void {
     minHeight: 600,
     title: "LibraryOS POS",
     webPreferences: {
-      preload: path.join(__dirname, "preload.js"),
+      preload: path.resolve(__dirname, "preload.js"),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
+      defaultFontFamily: {
+        standard: 'Tajawal',
+      },
     },
     frame: true,
     backgroundColor: "#f8f9fa",
   });
+
+  console.log("[Main] Created window with preload:", path.resolve(__dirname, "preload.js"));
 
   if (isDev) {
     mainWindow.loadURL("http://localhost:5174");
@@ -88,6 +93,15 @@ function createWindow(): void {
   } else {
     mainWindow.loadFile(path.join(app.getAppPath(), "dist/renderer/index.html"));
   }
+
+  mainWindow.webContents.on("did-finish-load", () => {
+    if (!mainWindow) return;
+    mainWindow.webContents.executeJavaScript(`
+      document.documentElement.setAttribute('dir', 'rtl');
+      document.documentElement.setAttribute('lang', 'ar');
+      document.body.style.direction = 'rtl';
+    `);
+  });
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url);

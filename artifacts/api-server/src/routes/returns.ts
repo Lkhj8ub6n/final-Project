@@ -1,3 +1,4 @@
+import { asyncHandler } from "../middlewares/error-handler";
 import { Router, type IRouter } from "express";
 import { eq, and } from "drizzle-orm";
 import { db, returnsTable, productsTable, invoicesTable } from "@workspace/db";
@@ -27,7 +28,7 @@ interface ReturnItemRequest {
   unitPrice?: number;
 }
 
-router.get("/returns", authenticate as never, async (req: AuthRequest, res): Promise<void> => {
+router.get("/returns", authenticate as never, asyncHandler(async (req: AuthRequest, res): Promise<void> => {
   const tenantId = req.user!.tenantId;
   if (!tenantId) { res.status(403).json({ error: "No tenant" }); return; }
   const returns_ = await db.select().from(returnsTable).where(eq(returnsTable.tenantId, tenantId));
@@ -37,9 +38,9 @@ router.get("/returns", authenticate as never, async (req: AuthRequest, res): Pro
     refundMethod: r.refundMethod, reason: r.reason,
     createdAt: r.createdAt?.toISOString?.() ?? r.createdAt,
   })));
-});
+}));
 
-router.post("/returns", authenticate as never, async (req: AuthRequest, res): Promise<void> => {
+router.post("/returns", authenticate as never, asyncHandler(async (req: AuthRequest, res): Promise<void> => {
   const tenantId = req.user!.tenantId;
   const staffId = req.user!.id;
   if (!tenantId) { res.status(403).json({ error: "No tenant" }); return; }
@@ -163,6 +164,6 @@ router.post("/returns", authenticate as never, async (req: AuthRequest, res): Pr
     refundMethod: result.refundMethod, reason: result.reason,
     createdAt: result.createdAt?.toISOString?.() ?? result.createdAt,
   });
-});
+}));
 
 export default router;

@@ -1,3 +1,4 @@
+import { asyncHandler } from "../middlewares/error-handler";
 import { Router, type IRouter, type Response } from "express";
 import { eq, and, desc } from "drizzle-orm";
 import { db, ordersTable, productsTable, usersTable, tenantsTable, notificationsTable, type Order as DbOrder } from "@workspace/db";
@@ -27,7 +28,7 @@ const requireTenantAdmin = (req: AuthRequest, res: Response): boolean => {
   return true;
 };
 
-router.get("/orders", authenticate as any, async (req: AuthRequest, res): Promise<void> => {
+router.get("/orders", authenticate as any, asyncHandler(async (req: AuthRequest, res): Promise<void> => {
   if (!requireTenantAdmin(req, res)) return;
   const tenantId = req.user!.tenantId;
   if (!tenantId) { res.status(403).json({ error: "No tenant" }); return; }
@@ -39,9 +40,9 @@ router.get("/orders", authenticate as any, async (req: AuthRequest, res): Promis
   const orders = await db.select().from(ordersTable).where(and(...conditions)).orderBy(desc(ordersTable.createdAt));
   const result = await Promise.all(orders.map(formatOrder));
   res.json(result);
-});
+}));
 
-router.get("/orders/:orderId", authenticate as any, async (req: AuthRequest, res): Promise<void> => {
+router.get("/orders/:orderId", authenticate as any, asyncHandler(async (req: AuthRequest, res): Promise<void> => {
   if (!requireTenantAdmin(req, res)) return;
   const tenantId = req.user!.tenantId;
   if (!tenantId) { res.status(403).json({ error: "No tenant" }); return; }
@@ -49,9 +50,9 @@ router.get("/orders/:orderId", authenticate as any, async (req: AuthRequest, res
   const [o] = await db.select().from(ordersTable).where(and(eq(ordersTable.id, id), eq(ordersTable.tenantId, tenantId)));
   if (!o) { res.status(404).json({ error: "Not found" }); return; }
   res.json(await formatOrder(o));
-});
+}));
 
-router.patch("/orders/:orderId/status", authenticate as any, async (req: AuthRequest, res): Promise<void> => {
+router.patch("/orders/:orderId/status", authenticate as any, asyncHandler(async (req: AuthRequest, res): Promise<void> => {
   if (!requireTenantAdmin(req, res)) return;
   const tenantId = req.user!.tenantId;
   if (!tenantId) { res.status(403).json({ error: "No tenant" }); return; }
@@ -60,9 +61,9 @@ router.patch("/orders/:orderId/status", authenticate as any, async (req: AuthReq
   const [o] = await db.update(ordersTable).set({ status }).where(and(eq(ordersTable.id, id), eq(ordersTable.tenantId, tenantId))).returning();
   if (!o) { res.status(404).json({ error: "Not found" }); return; }
   res.json(await formatOrder(o));
-});
+}));
 
-router.post("/orders/:orderId/cancel", authenticate as any, async (req: AuthRequest, res): Promise<void> => {
+router.post("/orders/:orderId/cancel", authenticate as any, asyncHandler(async (req: AuthRequest, res): Promise<void> => {
   if (!requireTenantAdmin(req, res)) return;
   const tenantId = req.user!.tenantId;
   if (!tenantId) { res.status(403).json({ error: "No tenant" }); return; }
@@ -70,17 +71,17 @@ router.post("/orders/:orderId/cancel", authenticate as any, async (req: AuthRequ
   const [o] = await db.update(ordersTable).set({ status: "cancelled" }).where(and(eq(ordersTable.id, id), eq(ordersTable.tenantId, tenantId))).returning();
   if (!o) { res.status(404).json({ error: "Not found" }); return; }
   res.json(await formatOrder(o));
-});
+}));
 
 // Store routes
-router.get("/store/:tenantSlug/info", async (req, res): Promise<void> => {
+router.get("/store/:tenantSlug/info", asyncHandler(async (req, res): Promise<void> => {
   const tenantSlug = Array.isArray(req.params.tenantSlug) ? req.params.tenantSlug[0] : req.params.tenantSlug;
   const [tenant] = await db.select().from(tenantsTable).where(eq(tenantsTable.slug, tenantSlug));
   if (!tenant) { res.status(404).json({ error: "Library not found" }); return; }
   res.json({ name: tenant.name, address: tenant.address ?? null, phone: tenant.phone ?? null, slug: tenant.slug });
-});
+}));
 
-router.get("/store/:tenantSlug/products", async (req, res): Promise<void> => {
+router.get("/store/:tenantSlug/products", asyncHandler(async (req, res): Promise<void> => {
   const tenantSlug = Array.isArray(req.params.tenantSlug) ? req.params.tenantSlug[0] : req.params.tenantSlug;
   const [tenant] = await db.select().from(tenantsTable).where(eq(tenantsTable.slug, tenantSlug));
   if (!tenant) { res.status(404).json({ error: "Library not found" }); return; }
@@ -102,9 +103,9 @@ router.get("/store/:tenantSlug/products", async (req, res): Promise<void> => {
     discountedPrice: null, imageUrl: p.imageUrl ?? null,
     stockQuantity: p.stockQuantity, isAvailable: p.stockQuantity > 0,
   })));
-});
+}));
 
-router.get("/store/:tenantSlug/products/:productId", async (req, res): Promise<void> => {
+router.get("/store/:tenantSlug/products/:productId", asyncHandler(async (req, res): Promise<void> => {
   const tenantSlug = Array.isArray(req.params.tenantSlug) ? req.params.tenantSlug[0] : req.params.tenantSlug;
   const productId = parseInt(Array.isArray(req.params.productId) ? req.params.productId[0] : req.params.productId, 10);
   const [tenant] = await db.select().from(tenantsTable).where(eq(tenantsTable.slug, tenantSlug));
@@ -112,9 +113,9 @@ router.get("/store/:tenantSlug/products/:productId", async (req, res): Promise<v
   const [p] = await db.select().from(productsTable).where(and(eq(productsTable.id, productId), eq(productsTable.tenantId, tenant.id)));
   if (!p) { res.status(404).json({ error: "Product not found" }); return; }
   res.json({ id: p.id, name: p.name, category: p.category, price: parseFloat(p.price as string), discountedPrice: null, imageUrl: p.imageUrl ?? null, stockQuantity: p.stockQuantity, isAvailable: p.stockQuantity > 0 });
-});
+}));
 
-router.post("/store/:tenantSlug/orders", authenticate as any, async (req: AuthRequest, res): Promise<void> => {
+router.post("/store/:tenantSlug/orders", authenticate as any, asyncHandler(async (req: AuthRequest, res): Promise<void> => {
   if (req.user!.role !== "student") { res.status(403).json({ error: "Only students can place store orders" }); return; }
   const tenantSlug = Array.isArray(req.params.tenantSlug) ? req.params.tenantSlug[0] : req.params.tenantSlug;
   const studentId = req.user!.id;
@@ -168,17 +169,17 @@ router.post("/store/:tenantSlug/orders", authenticate as any, async (req: AuthRe
   });
 
   res.status(201).json(await formatOrder(o));
-});
+}));
 
-router.get("/store/my-orders", authenticate as any, async (req: AuthRequest, res): Promise<void> => {
+router.get("/store/my-orders", authenticate as any, asyncHandler(async (req: AuthRequest, res): Promise<void> => {
   if (req.user!.role !== "student") { res.status(403).json({ error: "Only students can access their orders" }); return; }
   const studentId = req.user!.id;
   const orders = await db.select().from(ordersTable).where(eq(ordersTable.studentId, studentId)).orderBy(desc(ordersTable.createdAt));
   const result = await Promise.all(orders.map(formatOrder));
   res.json(result);
-});
+}));
 
-router.get("/store/:tenantSlug/my-orders", authenticate as any, async (req: AuthRequest, res): Promise<void> => {
+router.get("/store/:tenantSlug/my-orders", authenticate as any, asyncHandler(async (req: AuthRequest, res): Promise<void> => {
   if (req.user!.role !== "student") { res.status(403).json({ error: "Only students can access their orders" }); return; }
   const tenantSlug = Array.isArray(req.params.tenantSlug) ? req.params.tenantSlug[0] : req.params.tenantSlug;
   const [tenant] = await db.select().from(tenantsTable).where(eq(tenantsTable.slug, tenantSlug));
@@ -192,6 +193,6 @@ router.get("/store/:tenantSlug/my-orders", authenticate as any, async (req: Auth
     .orderBy(desc(ordersTable.createdAt));
   const result = await Promise.all(orders.map(formatOrder));
   res.json(result);
-});
+}));
 
 export default router;

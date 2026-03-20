@@ -2,7 +2,7 @@ import React from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/lib/auth-context";
 import {
-  LayoutDashboard, Building2, LogOut, ShieldCheck, Menu
+  LayoutDashboard, Building2, LogOut, ShieldCheck, Menu, Users, BarChart3
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -17,6 +17,8 @@ interface NavItem {
 const navItems: NavItem[] = [
   { title: "لوحة التحكم", href: "/dashboard", icon: LayoutDashboard },
   { title: "المكتبات", href: "/libraries", icon: Building2 },
+  { title: "المستخدمين", href: "/users", icon: Users },
+  { title: "التقارير المالية", href: "/reports", icon: BarChart3 },
 ];
 
 export function AdminLayout({ children }: { children: React.ReactNode }) {

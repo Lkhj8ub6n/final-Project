@@ -7,6 +7,8 @@
     "./utils": "./src/lib/utils.ts",
     "./hooks/use-mobile": "./src/hooks/use-mobile.tsx",
     "./hooks/use-toast": "./src/hooks/use-toast.ts",
+    "./hooks/use-pos-cart": "./src/hooks/use-pos-cart.ts",
+    "./lib/receipt-utils": "./src/lib/receipt-utils.ts",
     "./components/*": "./src/components/ui/*.tsx"
   },
   "dependencies": {

@@ -1,3 +1,4 @@
+import { asyncHandler } from "../middlewares/error-handler";
 import { Router, type IRouter } from "express";
 import { eq, and, desc } from "drizzle-orm";
 import { db, shiftsTable, usersTable, invoicesTable, returnsTable } from "@workspace/db";
@@ -15,7 +16,7 @@ function formatShift(s: typeof shiftsTable.$inferSelect, staffName: string) {
   };
 }
 
-router.get("/shifts", authenticate as any, async (req: AuthRequest, res): Promise<void> => {
+router.get("/shifts", authenticate as any, asyncHandler(async (req: AuthRequest, res): Promise<void> => {
   const tenantId = req.user!.tenantId;
   if (!tenantId) { res.status(403).json({ error: "No tenant" }); return; }
   const shifts = await db.select().from(shiftsTable).where(eq(shiftsTable.tenantId, tenantId)).orderBy(desc(shiftsTable.openedAt));
@@ -26,9 +27,9 @@ router.get("/shifts", authenticate as any, async (req: AuthRequest, res): Promis
     if (u) staffMap[uid] = u.name;
   }
   res.json(shifts.map(s => formatShift(s, staffMap[s.staffId] ?? "Unknown")));
-});
+}));
 
-router.post("/shifts/open", authenticate as any, async (req: AuthRequest, res): Promise<void> => {
+router.post("/shifts/open", authenticate as any, asyncHandler(async (req: AuthRequest, res): Promise<void> => {
   const tenantId = req.user!.tenantId;
   const staffId = req.user!.id;
   if (!tenantId) { res.status(403).json({ error: "No tenant" }); return; }
@@ -39,16 +40,16 @@ router.post("/shifts/open", authenticate as any, async (req: AuthRequest, res): 
     tenantId, staffId, openingBalance: openingBalance.toString(), status: "open", openedAt: new Date(),
   }).returning();
   res.status(201).json(formatShift(s, req.user!.name));
-});
+}));
 
-router.get("/shifts/current", authenticate as any, async (req: AuthRequest, res): Promise<void> => {
+router.get("/shifts/current", authenticate as any, asyncHandler(async (req: AuthRequest, res): Promise<void> => {
   const staffId = req.user!.id;
   const [s] = await db.select().from(shiftsTable).where(and(eq(shiftsTable.staffId, staffId), eq(shiftsTable.status, "open")));
   if (!s) { res.status(404).json({ error: "No open shift" }); return; }
   res.json(formatShift(s, req.user!.name));
-});
+}));
 
-router.post("/shifts/:shiftId/close", authenticate as any, async (req: AuthRequest, res): Promise<void> => {
+router.post("/shifts/:shiftId/close", authenticate as any, asyncHandler(async (req: AuthRequest, res): Promise<void> => {
   const tenantId = req.user!.tenantId;
   if (!tenantId) { res.status(403).json({ error: "No tenant" }); return; }
   const id = parseInt(Array.isArray(req.params.shiftId) ? req.params.shiftId[0] : req.params.shiftId, 10);
@@ -58,9 +59,9 @@ router.post("/shifts/:shiftId/close", authenticate as any, async (req: AuthReque
   }).where(and(eq(shiftsTable.id, id), eq(shiftsTable.tenantId, tenantId))).returning();
   if (!s) { res.status(404).json({ error: "Not found" }); return; }
   res.json(formatShift(s, req.user!.name));
-});
+}));
 
-router.get("/shifts/:shiftId", authenticate as any, async (req: AuthRequest, res): Promise<void> => {
+router.get("/shifts/:shiftId", authenticate as any, asyncHandler(async (req: AuthRequest, res): Promise<void> => {
   const tenantId = req.user!.tenantId;
   if (!tenantId) { res.status(403).json({ error: "No tenant" }); return; }
   const id = parseInt(Array.isArray(req.params.shiftId) ? req.params.shiftId[0] : req.params.shiftId, 10);
@@ -78,6 +79,6 @@ router.get("/shifts/:shiftId", authenticate as any, async (req: AuthRequest, res
     ...formatShift(s, staffName),
     totalInvoices: invoices.length, totalSales, cashSales, cardSales, totalReturns,
   });
-});
+}));
 
 export default router;

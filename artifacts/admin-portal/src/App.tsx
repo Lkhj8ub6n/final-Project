@@ -7,6 +7,8 @@ import NotFound from "@/pages/not-found";
 import Login from "@/pages/login";
 import Dashboard from "@/pages/dashboard";
 import Libraries from "@/pages/libraries";
+import Users from "@/pages/users";
+import Reports from "@/pages/reports";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -51,6 +53,12 @@ function Router() {
       </Route>
       <Route path="/libraries">
         {() => <ProtectedRoute component={Libraries} />}
+      </Route>
+      <Route path="/users">
+        {() => <ProtectedRoute component={Users} />}
+      </Route>
+      <Route path="/reports">
+        {() => <ProtectedRoute component={Reports} />}
       </Route>
       <Route component={NotFound} />
     </Switch>

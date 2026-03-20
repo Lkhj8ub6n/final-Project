@@ -28,6 +28,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const login = async (username: string, password: string, serverUrl: string): Promise<string | null> => {
+    if (!window.electronAPI) {
+      return "خطأ: تطبيق Electron غير متصل. يرجى تشغيل التطبيق كبرنامج سطح مكتب.";
+    }
     const result = await window.electronAPI.login(username, password, serverUrl);
     if (result.error) return result.error;
     const newAuth: AuthState = {
@@ -41,7 +44,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const logout = () => {
-    window.electronAPI.logout();
+    if (window.electronAPI) {
+      window.electronAPI.logout();
+    }
     setAuth({ user: null, token: null, serverUrl: null });
     localStorage.removeItem("pos_auth");
   };

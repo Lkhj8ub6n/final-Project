@@ -33,7 +33,8 @@ services:
     environment:
       DATABASE_URL: postgresql://libraryos:libraryos_secret@postgres:5432/libraryos
       PORT: "8080"
-      JWT_SECRET: change_me_in_production
+      JWT_SECRET: replace_with_a_strong_random_secret_min_32_chars
+      CORS_ORIGINS: "http://localhost:5173,http://localhost:3000"
       NODE_ENV: production
     depends_on:
       postgres:

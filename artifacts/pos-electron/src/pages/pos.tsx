@@ -8,25 +8,11 @@ import {
   StopCircle, TrendingUp, Hash, RefreshCw,
   PauseCircle, ListOrdered, RotateCcw, Tag, X
 } from "lucide-react";
+import { Numpad } from "../components/numpad";
+import { ConfirmDialog } from "../components/confirm-dialog";
 
-interface CartItem {
-  id: number;
-  productId: number;
-  name: string;
-  price: number;
-  quantity: number;
-  type: "product";
-}
-
-interface HeldInvoice {
-  id: number;
-  label: string;
-  items: CartItem[];
-  discountAmount: number;
-  discountPercent: number;
-  paymentMethod: "cash" | "card";
-  heldAt: Date;
-}
+import { usePosCart, type HeldInvoice, type CartItem } from "@workspace/ui/hooks/use-pos-cart";
+import { buildReceiptHtml as _buildReceiptHtml } from "@workspace/ui/lib/receipt-utils";
 
 interface LastInvoice {
   id: number | string;
@@ -43,12 +29,11 @@ export default function POS() {
 
   const [search, setSearch] = useState("");
   const [products, setProducts] = useState<Product[]>([]);
-  const [cart, setCart] = useState<CartItem[]>([]);
-  const [paymentMethod, setPaymentMethod] = useState<"cash" | "card">("cash");
-  const [paidAmount, setPaidAmount] = useState("");
   const [isSuccessOpen, setIsSuccessOpen] = useState(false);
   const [isOpenShiftOpen, setIsOpenShiftOpen] = useState(false);
   const [isCloseShiftOpen, setIsCloseShiftOpen] = useState(false);
+  const [isNumpadOpen, setIsNumpadOpen] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState<number | null>(null);
   const [openingBalance, setOpeningBalance] = useState("50");
   const [closingBalance, setClosingBalance] = useState("");
   const [lastInvoice, setLastInvoice] = useState<LastInvoice | null>(null);
@@ -62,16 +47,14 @@ export default function POS() {
   const [updateProgress, setUpdateProgress] = useState<number | null>(null);
   const barcodeRef = useRef<HTMLInputElement>(null);
 
-  // Discount state
-  const [discountType, setDiscountType] = useState<"percent" | "amount">("percent");
-  const [discountInput, setDiscountInput] = useState("");
-  const [discountAmount, setDiscountAmount] = useState(0);
-  const [discountPercent, setDiscountPercent] = useState(0);
-  const [isDiscountOpen, setIsDiscountOpen] = useState(false);
-
-  // Hold/Resume state
-  const [heldInvoices, setHeldInvoices] = useState<HeldInvoice[]>([]);
-  const [isHoldOpen, setIsHoldOpen] = useState(false);
+  const {
+    cart, discountType, setDiscountType, discountInput, setDiscountInput,
+    discountPercent, isDiscountOpen, setIsDiscountOpen, paymentMethod, setPaymentMethod,
+    paidAmount, setPaidAmount, heldInvoices, setHeldInvoices, isHoldOpen, setIsHoldOpen,
+    subtotal, effectiveDiscount, total, change, updateQuantity, removeFromCart, clearCart, 
+    applyDiscount, removeDiscount,
+    holdInvoice, resumeHeld, deleteHeld: _deleteHeld, addToCart: _addToCart,
+  } = usePosCart();
 
   // Returns state
   const [isReturnOpen, setIsReturnOpen] = useState(false);
@@ -92,11 +75,13 @@ export default function POS() {
   }, []);
 
   const loadProducts = useCallback(async (q?: string) => {
+    if (!window.electronAPI) return;
     const result = await window.electronAPI.getProducts(q);
     setProducts(result);
   }, []);
 
   const loadShift = useCallback(async () => {
+    if (!window.electronAPI) return;
     setLoadingShift(true);
     try {
       const s = await window.electronAPI.getCurrentShift();
@@ -111,8 +96,10 @@ export default function POS() {
   }, []);
 
   useEffect(() => {
-    loadProducts();
-    loadShift();
+    if (window.electronAPI) {
+      loadProducts();
+      loadShift();
+    }
   }, [loadProducts, loadShift]);
 
   useEffect(() => {
@@ -125,7 +112,7 @@ export default function POS() {
   }, [currentShift]);
 
   useEffect(() => {
-    const remove = window.electronAPI.onUpdateStatus((status, data: any) => {
+    const remove = window.electronAPI.onUpdateStatus((status: string, data: any) => {
       if (status === "available") {
         showToast("تحديث جديد متاح للصراف، جاري التنزيل...", "success");
       } else if (status === "progress" && data && typeof data.percent === "number") {
@@ -142,42 +129,14 @@ export default function POS() {
     return remove;
   }, [showToast]);
 
-  // ─── Totals ──────────────────────────────────────────────────────────────────
-  const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
-  const effectiveDiscount = Math.min(discountAmount, subtotal);
-  const total = Math.max(0, subtotal - effectiveDiscount);
-  const change = paymentMethod === "cash" && paidAmount
-    ? Math.max(0, parseFloat(paidAmount) - total)
-    : 0;
-
   // ─── Cart Functions ──────────────────────────────────────────────────────────
   const addToCart = (product: Product) => {
-    if (product.stockQuantity <= 0) { showToast("المنتج غير متوفر في المخزون", "error"); return; }
-    setCart((prev) => {
-      const existing = prev.find((i) => i.productId === product.id);
-      if (existing) {
-        if (existing.quantity >= product.stockQuantity) { showToast("الكمية المطلوبة غير متوفرة", "error"); return prev; }
-        return prev.map((i) => i.id === existing.id ? { ...i, quantity: i.quantity + 1 } : i);
-      }
-      return [...prev, { id: Date.now(), productId: product.id, name: product.name, price: product.price, quantity: 1, type: "product" }];
-    });
-    setSearch("");
-    barcodeRef.current?.focus();
+    _addToCart(
+      (product as unknown as any), 
+      (msg) => showToast(msg, "error"),
+      () => { setSearch(""); barcodeRef.current?.focus(); }
+    );
   };
-
-  const updateQuantity = (id: number, delta: number) => {
-    setCart((prev) => prev.map((i) => i.id === id ? { ...i, quantity: Math.max(1, i.quantity + delta) } : i));
-  };
-
-  const removeFromCart = (id: number) => setCart((prev) => prev.filter((i) => i.id !== id));
-
-  const clearCart = useCallback(() => {
-    setCart([]);
-    setDiscountAmount(0);
-    setDiscountPercent(0);
-    setDiscountInput("");
-    setPaidAmount("");
-  }, []);
 
   // ─── Shift Functions ─────────────────────────────────────────────────────────
   const handleOpenShift = async () => {
@@ -205,26 +164,7 @@ export default function POS() {
     }
   };
 
-  // ─── Discount ────────────────────────────────────────────────────────────────
-  const applyDiscount = () => {
-    const val = parseFloat(discountInput) || 0;
-    if (discountType === "percent") {
-      const pct = Math.min(100, Math.max(0, val));
-      const amt = (subtotal * pct) / 100;
-      setDiscountPercent(pct);
-      setDiscountAmount(amt);
-    } else {
-      setDiscountAmount(Math.min(subtotal, Math.max(0, val)));
-      setDiscountPercent(0);
-    }
-    setIsDiscountOpen(false);
-  };
 
-  const removeDiscount = () => {
-    setDiscountAmount(0);
-    setDiscountPercent(0);
-    setDiscountInput("");
-  };
 
   // ─── Checkout ────────────────────────────────────────────────────────────────
   const handleCheckout = async () => {
@@ -287,39 +227,27 @@ export default function POS() {
 
   const handlePrint = async () => {
     if (!lastInvoice) return;
-    const html = buildReceiptHtml(lastInvoice);
+    const html = _buildReceiptHtml({
+      id: lastInvoice.id,
+      items: lastInvoice.items,
+      total: lastInvoice.total,
+      discount: lastInvoice.discount,
+      paymentMethod: lastInvoice.paymentMethod,
+      paidAmount: lastInvoice.paidAmount
+    });
     await window.electronAPI.printReceipt(html);
   };
 
   // ─── Hold / Resume Invoices ──────────────────────────────────────────────────
-  const holdInvoice = () => {
-    if (cart.length === 0) return;
-    const held: HeldInvoice = {
-      id: Date.now(),
-      label: `فاتورة معلقة ${heldInvoices.length + 1}`,
-      items: [...cart],
-      discountAmount,
-      discountPercent,
-      paymentMethod,
-      heldAt: new Date(),
-    };
-    setHeldInvoices((prev) => [...prev, held]);
-    clearCart();
-    showToast(`تم تعليق الفاتورة — ${held.label}`);
+  const handleHoldInvoice = () => {
+    holdInvoice(() => showToast("تم تعليق الفاتورة بنجاح"));
   };
 
-  const resumeHeld = (held: HeldInvoice) => {
-    if (cart.length > 0) {
-      showToast("يوجد فاتورة حالية. قم بتعليقها أو إنهائها أولاً", "error");
-      return;
-    }
-    setCart(held.items);
-    setDiscountAmount(held.discountAmount);
-    setDiscountPercent(held.discountPercent);
-    setPaymentMethod(held.paymentMethod);
-    setHeldInvoices((prev) => prev.filter((h) => h.id !== held.id));
-    setIsHoldOpen(false);
-    showToast("تم استدعاء الفاتورة المعلقة");
+  const handleResumeHeld = (held: HeldInvoice) => {
+    resumeHeld(held, 
+      (msg) => showToast(msg, "error"),
+      () => showToast("تم استدعاء الفاتورة")
+    );
   };
 
   // ─── Returns ─────────────────────────────────────────────────────────────────
@@ -495,7 +423,7 @@ export default function POS() {
           {/* Actions Row */}
           <div className="px-5 py-3 bg-gray-50/50 border-b border-gray-100 flex gap-2 overflow-x-auto custom-scrollbar">
             <button
-              onClick={holdInvoice}
+              onClick={handleHoldInvoice}
               disabled={cart.length === 0}
               className="flex items-center gap-2 px-4 py-2 bg-white text-amber-600 rounded-xl text-xs font-black border border-gray-200 hover:border-amber-500/30 hover:bg-amber-50/30 disabled:opacity-40 transition-all shadow-sm active:scale-95"
             >
@@ -552,16 +480,16 @@ export default function POS() {
                     </div>
                     <div className="flex items-center justify-between pt-3 border-t border-gray-50">
                       <div className="flex items-center gap-1 bg-gray-50 p-1 rounded-xl border border-gray-100">
-                        <button className="h-10 w-10 rounded-lg hover:bg-white hover:shadow-sm flex items-center justify-center text-gray-500 transition-all active:scale-90" onClick={() => updateQuantity(item.id, -1)}>
-                          <Minus className="w-4 h-4" />
+                        <button className="h-12 w-12 rounded-lg hover:bg-white hover:shadow-sm flex items-center justify-center text-gray-500 transition-all active:scale-90" onClick={() => updateQuantity(item.id, -1)}>
+                          <Minus className="w-5 h-5" />
                         </button>
-                        <span className="w-12 text-center font-black text-xl text-gray-700">{item.quantity}</span>
-                        <button className="h-10 w-10 rounded-lg hover:bg-white hover:shadow-sm flex items-center justify-center text-gray-500 transition-all active:scale-90" onClick={() => updateQuantity(item.id, 1)}>
-                          <Plus className="w-4 h-4" />
+                        <span className="w-14 text-center font-black text-2xl text-gray-700">{item.quantity}</span>
+                        <button className="h-12 w-12 rounded-lg hover:bg-white hover:shadow-sm flex items-center justify-center text-gray-500 transition-all active:scale-90" onClick={() => updateQuantity(item.id, 1)}>
+                          <Plus className="w-5 h-5" />
                         </button>
                       </div>
-                      <button className="h-10 w-10 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-xl flex items-center justify-center transition-all active:scale-90" onClick={() => removeFromCart(item.id)}>
-                        <Trash2 className="w-5 h-5" />
+                      <button className="h-12 w-12 text-red-500 hover:text-red-600 hover:bg-red-50 rounded-xl flex items-center justify-center transition-all active:scale-90" onClick={() => setItemToDelete(item.id)}>
+                        <Trash2 className="w-6 h-6" />
                       </button>
                     </div>
                   </div>
@@ -627,8 +555,9 @@ export default function POS() {
                     type="number" min={total} step="0.001"
                     placeholder={total.toFixed(3)}
                     value={paidAmount}
-                    onChange={(e) => setPaidAmount(e.target.value)}
-                    className="w-full h-12 text-center text-2xl font-black rounded-xl border border-teal-200 focus:border-teal-500 bg-white outline-none shadow-inner"
+                    readOnly
+                    onClick={() => setIsNumpadOpen(true)}
+                    className="w-full h-14 text-center text-3xl font-black rounded-xl border border-teal-200 focus:border-teal-500 bg-white shadow-inner cursor-pointer"
                   />
                 </div>
                 {paidAmount && parseFloat(paidAmount) >= total && (
@@ -654,13 +583,13 @@ export default function POS() {
         <div className="flex-1 flex flex-col bg-gray-50/50 overflow-hidden relative">
           <div className="p-6 bg-white border-b border-gray-100 shadow-sm z-20 flex gap-4">
             <div className="relative flex-1 group">
-              <Barcode className="absolute right-5 top-1/2 -translate-y-1/2 w-6 h-6 text-teal-600 transition-transform group-focus-within:scale-110" />
+              <Barcode className="absolute left-5 top-1/2 -translate-y-1/2 w-6 h-6 text-teal-600 transition-transform group-focus-within:scale-110" />
               <input
                 ref={barcodeRef}
                 placeholder="امسح الباركود أو ابحث عن منتج بالاسم..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full h-16 pe-16 ps-6 bg-gray-50 border border-gray-100 focus:border-teal-500 focus:ring-4 focus:ring-teal-500/5 rounded-2xl text-xl font-black outline-none transition-all placeholder:text-gray-300 shadow-inner"
+                className="w-full h-16 ps-16 pe-6 bg-gray-50 border border-gray-100 focus:border-teal-500 focus:ring-4 focus:ring-teal-500/5 rounded-2xl text-xl font-black outline-none transition-all placeholder:text-gray-300 shadow-inner text-right"
                 autoFocus
               />
             </div>
@@ -685,31 +614,48 @@ export default function POS() {
             ))}
           </div>
 
-          <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
+          <div className="flex-1 overflow-y-auto overflow-x-hidden p-6 custom-scrollbar text-right">
             <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6 pb-32">
               {products.filter((p) => catTranslate(p.category, activeCat)).map((product) => (
                 <button
                   key={product.id}
                   onClick={() => addToCart(product)}
                   disabled={product.stockQuantity <= 0}
-                  className={`flex flex-col h-44 p-5 rounded-3xl border text-right transition-all duration-300 relative overflow-hidden group shadow-sm ${
+                  className={`flex flex-col h-52 rounded-3xl border text-right transition-all duration-300 relative group shadow-sm ${
                     product.stockQuantity > 0
                       ? "bg-white border-white hover:border-teal-500/30 hover:shadow-elevated active:scale-95 premium-card"
                       : "bg-gray-100 border-gray-200 opacity-60 cursor-not-allowed"
                   }`}
                 >
-                  <div className="font-black text-lg text-gray-800 leading-tight line-clamp-2 h-14">{product.name}</div>
-                  <div className="mt-auto flex items-end justify-between w-full">
-                    <div className="flex flex-col">
-                      <span className="text-[10px] font-black text-gray-400 leading-none">السعر</span>
-                      <div className="font-black text-2xl text-teal-600 tabular-nums">{product.price.toFixed(3)}</div>
-                    </div>
-                    <div className={`text-[10px] font-black px-3 py-1.5 rounded-xl ${product.stockQuantity > 10 ? "bg-green-50 text-green-600" : product.stockQuantity > 0 ? "bg-amber-50 text-amber-600" : "bg-red-50 text-red-600"}`}>
+                  {/* اسم المنتج — أعلى البطاقة */}
+                  <div className="px-5 pt-5 font-black text-lg text-gray-800 leading-tight line-clamp-2 text-right w-full">
+                    {product.name}
+                  </div>
+
+                  {/* spacer */}
+                  <div className="flex-1" />
+
+                  {/* السعر والمخزون — أسفل البطاقة دايماً */}
+                  <div className="px-5 pb-5 flex items-end justify-between w-full">
+                    <div className={`text-[10px] font-black px-3 py-1.5 rounded-xl shrink-0 ${
+                      product.stockQuantity > 10 ? "bg-green-50 text-green-600" 
+                      : product.stockQuantity > 0 ? "bg-amber-50 text-amber-600" 
+                      : "bg-red-50 text-red-600"
+                    }`}>
                       {product.stockQuantity} متوفر
                     </div>
+                    <div className="flex flex-col items-end">
+                      <span className="text-[10px] font-black text-gray-400 leading-none">السعر</span>
+                      <div className="font-black text-2xl text-teal-600 tabular-nums">
+                        {product.price.toFixed(3)}
+                      </div>
+                    </div>
                   </div>
-                  {/* Decorative glow on hover */}
-                  <div className="absolute -bottom-4 -left-4 w-12 h-12 bg-teal-500/10 blur-2xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity" />
+
+                  {/* Glow effect */}
+                  <div className="absolute inset-0 rounded-3xl overflow-hidden pointer-events-none">
+                    <div className="absolute -bottom-4 -right-4 w-12 h-12 bg-teal-500/10 blur-2xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </div>
                 </button>
               ))}
             </div>
@@ -772,8 +718,8 @@ export default function POS() {
                       <p className="text-xs text-gray-500">{h.items.length} منتجات | {h.heldAt.toLocaleTimeString("ar-JO")}</p>
                     </div>
                     <div className="flex gap-2">
-                      <button onClick={() => resumeHeld(h)} className="px-3 py-1.5 bg-teal-600 text-white rounded-lg text-sm font-bold hover:bg-teal-700">استدعاء</button>
-                      <button onClick={() => setHeldInvoices(prev => prev.filter(x => x.id !== h.id))} className="px-3 py-1.5 bg-red-100 text-red-600 rounded-lg text-sm font-bold hover:bg-red-200">حذف</button>
+                      <button onClick={() => handleResumeHeld(h)} className="px-3 py-1.5 bg-teal-600 text-white rounded-lg text-sm font-bold hover:bg-teal-700">استدعاء</button>
+                      <button onClick={() => setHeldInvoices((prev: any[]) => prev.filter((x: any) => x.id !== h.id))} className="px-3 py-1.5 bg-red-100 text-red-600 rounded-lg text-sm font-bold hover:bg-red-200">حذف</button>
                     </div>
                   </div>
                 ))}
@@ -981,6 +927,48 @@ export default function POS() {
           </div>
         </Modal>
       )}
+
+      {/* Numpad Modal */}
+      {isNumpadOpen && (
+        <Modal onClose={() => setIsNumpadOpen(false)}>
+          <div className="p-8">
+            <h2 className="text-2xl font-bold mb-6 text-center text-teal-800">أدخل المبلغ المدفوع</h2>
+            <div className="bg-gray-50 p-4 rounded-xl mb-6 border border-gray-200 flex justify-between items-center">
+              <span className="text-gray-500 font-bold">الإجمالي المطلوب</span>
+              <span className="text-2xl font-black text-red-600">{total.toFixed(3)} ד.أ</span>
+            </div>
+            
+            <div className="mb-6 relative">
+              <input 
+                type="text" 
+                value={paidAmount || "0"} 
+                readOnly 
+                className="w-full h-20 text-center text-5xl font-black rounded-2xl border-2 border-teal-500 bg-white text-teal-700 shadow-inner"
+              />
+            </div>
+
+            <Numpad 
+              value={paidAmount || "0"} 
+              onChange={setPaidAmount}
+              onConfirm={() => setIsNumpadOpen(false)}
+            />
+          </div>
+        </Modal>
+      )}
+
+      {/* Confirm Deletion Dialog */}
+      <ConfirmDialog
+        isOpen={itemToDelete !== null}
+        title="تأكيد الحذف"
+        message="هل أنت متأكد من حذف هذا العنصر من الفاتورة؟"
+        onConfirm={() => {
+          if (itemToDelete !== null) {
+            removeFromCart(itemToDelete);
+            setItemToDelete(null);
+          }
+        }}
+        onCancel={() => setItemToDelete(null)}
+      />
     </div>
   );
 }
@@ -1006,74 +994,3 @@ function StatBox({ icon, value, label, color }: { icon: React.ReactNode; value: 
   );
 }
 
-function buildReceiptHtml(invoice: LastInvoice): string {
-  const itemsHtml = invoice.items.map((item) => `
-    <tr>
-      <td style="padding:4px 0; border-bottom: 1px dashed #eee;">${item.name}</td>
-      <td style="text-align:center; padding:4px 0; border-bottom: 1px dashed #eee;">${item.quantity}</td>
-      <td style="text-align:left; padding:4px 0; border-bottom: 1px dashed #eee;">${(item.price * item.quantity).toFixed(3)} د.أ</td>
-    </tr>
-  `).join("");
-
-  return `
-    <!DOCTYPE html>
-    <html lang="ar" dir="rtl">
-    <head>
-      <meta charset="UTF-8">
-      <style>
-        body { font-family: Arial, sans-serif; max-width: 300px; margin: 0 auto; font-size: 12px; color: #000; }
-        .header { text-align: center; margin-bottom: 16px; border-bottom: 2px solid #000; padding-bottom: 12px; }
-        h1 { margin: 0; font-size: 20px; }
-        table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
-        th { text-align: right; padding: 4px 0; border-bottom: 2px solid #000; }
-        .total { border-top: 2px solid #000; padding-top: 8px; }
-        .footer { text-align: center; margin-top: 16px; color: #666; }
-      </style>
-    </head>
-    <body>
-      <div class="header">
-        <h1>LibraryOS</h1>
-        <p>إيصال رقم #${invoice.id}</p>
-        <p style="font-size:10px; color:#666;">${new Date().toLocaleString("ar-JO")}</p>
-      </div>
-      <table>
-        <thead>
-          <tr>
-            <th>المنتج</th>
-            <th style="text-align:center">الكمية</th>
-            <th style="text-align:left">السعر</th>
-          </tr>
-        </thead>
-        <tbody>${itemsHtml}</tbody>
-      </table>
-      <div class="total">
-        ${invoice.discount > 0 ? `
-          <div style="display:flex; justify-content:space-between; color:#666; margin-bottom:4px">
-            <span>المجموع</span>
-            <span>${(invoice.total + invoice.discount).toFixed(3)} د.أ</span>
-          </div>
-          <div style="display:flex; justify-content:space-between; color:#900; margin-bottom:4px">
-            <span>خصم</span>
-            <span>-${invoice.discount.toFixed(3)} د.أ</span>
-          </div>
-        ` : ""}
-        <div style="display:flex; justify-content:space-between; font-weight:bold; font-size:16px;">
-          <span>الإجمالي</span>
-          <span>${invoice.total.toFixed(3)} د.أ</span>
-        </div>
-        ${invoice.paidAmount !== undefined ? `
-          <div style="display:flex; justify-content:space-between; font-size:11px; color:#666; margin-top:4px;">
-            <span>المدفوع</span>
-            <span>${invoice.paidAmount.toFixed(3)} د.أ</span>
-          </div>
-        ` : ""}
-        <div style="display:flex; justify-content:space-between; font-size:11px; color:#666; margin-top:4px;">
-          <span>طريقة الدفع</span>
-          <span>${invoice.paymentMethod === "cash" ? "نقدي" : "بطاقة"}</span>
-        </div>
-      </div>
-      <div class="footer"><p>شكراً لزيارتكم</p></div>
-    </body>
-    </html>
-  `;
-}

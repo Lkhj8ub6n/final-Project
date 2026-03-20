@@ -19,6 +19,8 @@
   },
   "dependencies": {
     "@workspace/api-zod": "workspace:*",
+    "@workspace/ui": "workspace:*",
+    "@workspace/api-client-react": "workspace:*",
     "better-sqlite3": "^11.7.0",
     "electron-updater": "^6.3.9"
   },

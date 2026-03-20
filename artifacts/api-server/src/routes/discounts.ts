@@ -1,3 +1,4 @@
+import { asyncHandler } from "../middlewares/error-handler";
 import { Router, type IRouter } from "express";
 import { eq, and } from "drizzle-orm";
 import { db, discountsTable } from "@workspace/db";
@@ -18,14 +19,14 @@ function formatDiscount(d: any) {
   };
 }
 
-router.get("/discounts", authenticate as any, async (req: AuthRequest, res): Promise<void> => {
+router.get("/discounts", authenticate as any, asyncHandler(async (req: AuthRequest, res): Promise<void> => {
   const tenantId = req.user!.tenantId;
   if (!tenantId) { res.status(403).json({ error: "No tenant" }); return; }
   const discounts = await db.select().from(discountsTable).where(eq(discountsTable.tenantId, tenantId));
   res.json(discounts.map(formatDiscount));
-});
+}));
 
-router.post("/discounts", authenticate as any, async (req: AuthRequest, res): Promise<void> => {
+router.post("/discounts", authenticate as any, asyncHandler(async (req: AuthRequest, res): Promise<void> => {
   const tenantId = req.user!.tenantId;
   if (!tenantId) { res.status(403).json({ error: "No tenant" }); return; }
   const data = req.body;
@@ -39,9 +40,9 @@ router.post("/discounts", authenticate as any, async (req: AuthRequest, res): Pr
     startDate: data.startDate, endDate: data.endDate, isActive: data.isActive ?? true,
   }).returning();
   res.status(201).json(formatDiscount(d));
-});
+}));
 
-router.patch("/discounts/:discountId", authenticate as any, async (req: AuthRequest, res): Promise<void> => {
+router.patch("/discounts/:discountId", authenticate as any, asyncHandler(async (req: AuthRequest, res): Promise<void> => {
   const id = parseInt(Array.isArray(req.params.discountId) ? req.params.discountId[0] : req.params.discountId, 10);
   const updates: any = {};
   const fields = ["name","discountValue","discountType","startDate","endDate","isActive"];
@@ -53,21 +54,21 @@ router.patch("/discounts/:discountId", authenticate as any, async (req: AuthRequ
   const [d] = await db.update(discountsTable).set(updates).where(eq(discountsTable.id, id)).returning();
   if (!d) { res.status(404).json({ error: "Not found" }); return; }
   res.json(formatDiscount(d));
-});
+}));
 
-router.delete("/discounts/:discountId", authenticate as any, async (req: AuthRequest, res): Promise<void> => {
+router.delete("/discounts/:discountId", authenticate as any, asyncHandler(async (req: AuthRequest, res): Promise<void> => {
   const id = parseInt(Array.isArray(req.params.discountId) ? req.params.discountId[0] : req.params.discountId, 10);
   const [d] = await db.delete(discountsTable).where(eq(discountsTable.id, id)).returning();
   if (!d) { res.status(404).json({ error: "Not found" }); return; }
   res.sendStatus(204);
-});
+}));
 
-router.post("/discounts/:discountId/toggle", authenticate as any, async (req: AuthRequest, res): Promise<void> => {
+router.post("/discounts/:discountId/toggle", authenticate as any, asyncHandler(async (req: AuthRequest, res): Promise<void> => {
   const id = parseInt(Array.isArray(req.params.discountId) ? req.params.discountId[0] : req.params.discountId, 10);
   const [current] = await db.select().from(discountsTable).where(eq(discountsTable.id, id));
   if (!current) { res.status(404).json({ error: "Not found" }); return; }
   const [d] = await db.update(discountsTable).set({ isActive: !current.isActive }).where(eq(discountsTable.id, id)).returning();
   res.json(formatDiscount(d));
-});
+}));
 
 export default router;

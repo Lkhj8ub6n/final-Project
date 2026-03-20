@@ -22,24 +22,8 @@ import {
   Popover, PopoverContent, PopoverTrigger,
 } from "@/components/ui/popover";
 
-interface CartItem {
-  id: number;
-  productId: number;
-  name: string;
-  price: number;
-  quantity: number;
-  type: "product" | "card" | "print_service";
-}
-
-interface HeldInvoice {
-  id: number;
-  label: string;
-  items: CartItem[];
-  discountAmount: number;
-  discountPercent: number;
-  paymentMethod: "cash" | "card";
-  heldAt: Date;
-}
+import { usePosCart, type HeldInvoice, type CartItem } from "@workspace/ui/hooks/use-pos-cart";
+import { buildReceiptHtml as _buildReceiptHtml } from "@workspace/ui/lib/receipt-utils";
 
 interface LastInvoice {
   id: number;
@@ -53,9 +37,6 @@ interface LastInvoice {
 export default function POSSell() {
   const { toast } = useToast();
   const [search, setSearch] = useState("");
-  const [cart, setCart] = useState<CartItem[]>([]);
-  const [paymentMethod, setPaymentMethod] = useState<"cash" | "card">("cash");
-  const [paidAmount, setPaidAmount] = useState("");
   const [isSuccessOpen, setIsSuccessOpen] = useState(false);
   const [isOpenShiftOpen, setIsOpenShiftOpen] = useState(false);
   const [isCloseShiftOpen, setIsCloseShiftOpen] = useState(false);
@@ -64,16 +45,15 @@ export default function POSSell() {
   const [lastInvoice, setLastInvoice] = useState<LastInvoice | null>(null);
   const barcodeInputRef = useRef<HTMLInputElement>(null);
 
-  // Discount
-  const [discountType, setDiscountType] = useState<"percent" | "amount">("percent");
-  const [discountInput, setDiscountInput] = useState("");
-  const [discountAmount, setDiscountAmount] = useState(0);
-  const [discountPercent, setDiscountPercent] = useState(0);
-  const [isDiscountOpen, setIsDiscountOpen] = useState(false);
-
-  // Hold/Resume
-  const [heldInvoices, setHeldInvoices] = useState<HeldInvoice[]>([]);
-  const [isHoldOpen, setIsHoldOpen] = useState(false);
+  const {
+    cart, setCart, discountType, setDiscountType, discountInput, setDiscountInput,
+    discountAmount, setDiscountAmount, discountPercent, setDiscountPercent,
+    isDiscountOpen, setIsDiscountOpen, paymentMethod, setPaymentMethod,
+    paidAmount, setPaidAmount, heldInvoices, setHeldInvoices, isHoldOpen, setIsHoldOpen,
+    subtotal, effectiveDiscount, total, change,
+    updateQuantity, removeFromCart, clearCart, applyDiscount, removeDiscount,
+    holdInvoice, resumeHeld, deleteHeld, addToCart: _addToCart,
+  } = usePosCart();
 
   // Returns
   const [isReturnOpen, setIsReturnOpen] = useState(false);
@@ -107,13 +87,13 @@ export default function POSSell() {
     if (currentShift) barcodeInputRef.current?.focus();
   }, [currentShift]);
 
-  // ─── Totals ────────────────────────────────────────────────────────────────
-  const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
-  const effectiveDiscount = Math.min(discountAmount, subtotal);
-  const total = Math.max(0, subtotal - effectiveDiscount);
-  const change = paymentMethod === "cash" && paidAmount
-    ? Math.max(0, parseFloat(paidAmount) - total)
-    : 0;
+  // ─── Cart ──────────────────────────────────────────────────────────────────
+  const addToCart = (product: { id: number; name: string; price: string; stockQuantity: number; category?: string }) => {
+    _addToCart(product, 
+      (msg) => toast({ title: "عذراً", description: msg, variant: "destructive" }),
+      () => { setSearch(""); barcodeInputRef.current?.focus(); }
+    );
+  };
 
   // ─── Shift ─────────────────────────────────────────────────────────────────
   const handleOpenShift = async () => {
@@ -143,56 +123,6 @@ export default function POSSell() {
   };
 
   // ─── Cart ──────────────────────────────────────────────────────────────────
-  const addToCart = (product: { id: number; name: string; price: string; stockQuantity: number; category?: string }) => {
-    setCart((prev) => {
-      const existing = prev.find((item) => item.productId === product.id && item.type === "product");
-      if (existing) {
-        if (existing.quantity >= product.stockQuantity) {
-          toast({ title: "عذراً", description: "الكمية المطلوبة غير متوفرة", variant: "destructive" });
-          return prev;
-        }
-        return prev.map((item) => item.id === existing.id ? { ...item, quantity: item.quantity + 1 } : item);
-      }
-      return [...prev, { id: Date.now(), productId: product.id, name: product.name, price: parseFloat(product.price), quantity: 1, type: "product" }];
-    });
-    setSearch("");
-    barcodeInputRef.current?.focus();
-  };
-
-  const updateQuantity = (id: number, delta: number) => {
-    setCart((prev) => prev.map((item) => item.id === id ? { ...item, quantity: Math.max(1, item.quantity + delta) } : item));
-  };
-
-  const removeFromCart = (id: number) => setCart((prev) => prev.filter((item) => item.id !== id));
-
-  const clearCart = useCallback(() => {
-    setCart([]);
-    setDiscountAmount(0);
-    setDiscountPercent(0);
-    setDiscountInput("");
-    setPaidAmount("");
-  }, []);
-
-  // ─── Discount ──────────────────────────────────────────────────────────────
-  const applyDiscount = () => {
-    const val = parseFloat(discountInput) || 0;
-    if (discountType === "percent") {
-      const pct = Math.min(100, Math.max(0, val));
-      const amt = (subtotal * pct) / 100;
-      setDiscountPercent(pct);
-      setDiscountAmount(amt);
-    } else {
-      setDiscountAmount(Math.min(subtotal, Math.max(0, val)));
-      setDiscountPercent(0);
-    }
-    setIsDiscountOpen(false);
-  };
-
-  const removeDiscount = () => {
-    setDiscountAmount(0);
-    setDiscountPercent(0);
-    setDiscountInput("");
-  };
 
   // ─── Checkout ──────────────────────────────────────────────────────────────
   const handleCheckout = async () => {
@@ -244,38 +174,17 @@ export default function POSSell() {
   };
 
   // ─── Hold / Resume ─────────────────────────────────────────────────────────
-  const holdInvoice = () => {
-    if (cart.length === 0) return;
-    const held: HeldInvoice = {
-      id: Date.now(),
-      label: `فاتورة معلقة ${heldInvoices.length + 1}`,
-      items: [...cart],
-      discountAmount,
-      discountPercent,
-      paymentMethod,
-      heldAt: new Date(),
-    };
-    setHeldInvoices((prev) => [...prev, held]);
-    clearCart();
-    toast({ title: "تم تعليق الفاتورة", description: `يمكنك استدعاؤها عند الحاجة` });
+  const handleHoldInvoice = () => {
+    holdInvoice(() => {
+      toast({ title: "تم تعليق الفاتورة", description: `يمكنك استدعاؤها عند الحاجة` });
+    });
   };
 
-  const resumeHeld = (held: HeldInvoice) => {
-    if (cart.length > 0) {
-      toast({ title: "يوجد فاتورة حالية. قم بتعليقها أو إنهائها أولاً", variant: "destructive" });
-      return;
-    }
-    setCart(held.items);
-    setDiscountAmount(held.discountAmount);
-    setDiscountPercent(held.discountPercent);
-    setPaymentMethod(held.paymentMethod);
-    setHeldInvoices((prev) => prev.filter((h) => h.id !== held.id));
-    setIsHoldOpen(false);
-    toast({ title: "تم استدعاء الفاتورة المعلقة" });
-  };
-
-  const deleteHeld = (id: number) => {
-    setHeldInvoices((prev) => prev.filter((h) => h.id !== id));
+  const handleResumeHeld = (held: HeldInvoice) => {
+    resumeHeld(held, 
+      (msg) => toast({ title: msg, variant: "destructive" }),
+      () => toast({ title: "تم استدعاء الفاتورة المعلقة" })
+    );
   };
 
   // ─── Returns ───────────────────────────────────────────────────────────────
@@ -349,36 +258,22 @@ export default function POSSell() {
   // ─── Print helpers ─────────────────────────────────────────────────────────
   const buildReceiptHtml = (inv: LastInvoice | null, pid?: number, piTitle?: string, piItems?: InvoiceItem[], piTotal?: number) => {
     if (inv) {
-      return `
-        <div style="font-family:sans-serif;direction:rtl;padding:24px;max-width:320px;margin:auto;color:#000">
-          <h1 style="text-align:center;font-size:20px;border-bottom:2px solid #000;padding-bottom:8px">LibraryOS</h1>
-          <p style="text-align:center;color:#555;margin:4px 0">إيصال رقم #${inv.id}</p>
-          <p style="text-align:center;color:#888;font-size:12px">${new Date().toLocaleString("ar-JO")}</p>
-          <table style="width:100%;margin:12px 0;border-collapse:collapse">
-            <thead><tr style="border-bottom:1px solid #000"><th style="text-align:right;padding:4px">المنتج</th><th style="text-align:center;padding:4px">الكمية</th><th style="text-align:left;padding:4px">السعر</th></tr></thead>
-            <tbody>${inv.items.map((i) => `<tr style="border-bottom:1px dashed #ccc"><td style="padding:4px">${i.name}</td><td style="text-align:center;padding:4px">${i.quantity}</td><td style="text-align:left;padding:4px">${(i.price * i.quantity).toFixed(3)} د.أ</td></tr>`).join("")}</tbody>
-          </table>
-          <div style="border-top:2px solid #000;padding-top:8px">
-            ${inv.discount > 0 ? `<div style="display:flex;justify-content:space-between;color:#888"><span>المجموع</span><span>${(inv.total + inv.discount).toFixed(3)} د.أ</span></div><div style="display:flex;justify-content:space-between;color:#e53"><span>خصم</span><span>-${inv.discount.toFixed(3)} د.أ</span></div>` : ""}
-            <div style="display:flex;justify-content:space-between;font-weight:bold;font-size:18px"><span>الإجمالي</span><span>${inv.total.toFixed(3)} د.أ</span></div>
-            ${inv.paidAmount !== undefined ? `<div style="display:flex;justify-content:space-between;color:#555"><span>المدفوع</span><span>${inv.paidAmount.toFixed(3)} د.أ</span></div><div style="display:flex;justify-content:space-between;color:#2a2"><span>الباقي</span><span>${(inv.paidAmount - inv.total).toFixed(3)} د.أ</span></div>` : ""}
-            <div style="display:flex;justify-content:space-between;color:#555;font-size:13px"><span>طريقة الدفع</span><span>${inv.paymentMethod === "cash" ? "نقدي" : "بطاقة"}</span></div>
-          </div>
-          <div style="text-align:center;margin-top:20px;color:#888;font-size:12px">شكراً لزيارتكم</div>
-        </div>`;
+      return _buildReceiptHtml({
+        id: inv.id,
+        items: inv.items,
+        total: inv.total,
+        discount: inv.discount,
+        paymentMethod: inv.paymentMethod,
+        paidAmount: inv.paidAmount
+      });
     }
     if (pid && piItems && piTotal !== undefined) {
-      return `
-        <div style="font-family:sans-serif;direction:rtl;padding:24px;max-width:320px;margin:auto;color:#000">
-          <h1 style="text-align:center;font-size:20px;border-bottom:2px solid #000;padding-bottom:8px">LibraryOS</h1>
-          <p style="text-align:center;color:#555;margin:4px 0">إيصال رقم #${pid} ${piTitle ? `— ${piTitle}` : ""}</p>
-          <table style="width:100%;margin:12px 0;border-collapse:collapse">
-            <thead><tr style="border-bottom:1px solid #000"><th style="text-align:right;padding:4px">المنتج</th><th style="text-align:center;padding:4px">الكمية</th><th style="text-align:left;padding:4px">السعر</th></tr></thead>
-            <tbody>${piItems.map((i) => `<tr style="border-bottom:1px dashed #ccc"><td style="padding:4px">${i.productName}</td><td style="text-align:center;padding:4px">${i.quantity}</td><td style="text-align:left;padding:4px">${(i.unitPrice * i.quantity).toFixed(3)} د.أ</td></tr>`).join("")}</tbody>
-          </table>
-          <div style="border-top:2px solid #000;padding-top:8px;display:flex;justify-content:space-between;font-weight:bold;font-size:18px"><span>الإجمالي</span><span>${piTotal.toFixed(3)} د.أ</span></div>
-          <div style="text-align:center;margin-top:20px;color:#888;font-size:12px">شكراً لزيارتكم</div>
-        </div>`;
+      return _buildReceiptHtml({
+        id: pid,
+        title: piTitle,
+        items: piItems,
+        total: piTotal
+      });
     }
     return "";
   };
@@ -435,10 +330,9 @@ export default function POSSell() {
             </div>
           </div>
 
-          {/* Action Buttons Row */}
           <div className="px-4 py-2 bg-gray-50 border-b border-border flex gap-2">
             <button
-              onClick={holdInvoice}
+              onClick={handleHoldInvoice}
               disabled={cart.length === 0}
               className="flex items-center gap-1 px-3 py-1.5 bg-amber-50 text-amber-700 rounded-lg text-xs font-bold border border-amber-200 hover:bg-amber-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
@@ -823,7 +717,7 @@ export default function POSSell() {
                       <p className="text-xs text-muted-foreground mt-0.5">{held.heldAt.toLocaleTimeString("ar-JO")}</p>
                     </div>
                     <div className="flex gap-2">
-                      <Button size="sm" className="h-9 font-bold rounded-xl" onClick={() => resumeHeld(held)}>استدعاء</Button>
+                      <Button size="sm" className="h-9 font-bold rounded-xl" onClick={() => handleResumeHeld(held)}>استدعاء</Button>
                       <Button size="sm" variant="ghost" className="h-9 w-9 rounded-xl text-destructive hover:bg-destructive/10" onClick={() => deleteHeld(held.id)}>
                         <Trash2 className="w-4 h-4" />
                       </Button>

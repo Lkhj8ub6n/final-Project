@@ -14,7 +14,12 @@
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "noFallthroughCasesInSwitch": true
+    "noFallthroughCasesInSwitch": true,
+    "paths": {
+      "@/*": ["./src/*"],
+      "@workspace/ui/*": ["../../lib/ui/src/*"],
+      "@workspace/api-client-react/*": ["../../lib/api-client-react/src/*"]
+    }
   },
   "include": ["src"]
 }

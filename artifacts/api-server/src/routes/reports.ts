@@ -1,3 +1,4 @@
+import { asyncHandler } from "../middlewares/error-handler";
 import { Router, type IRouter } from "express";
 import { eq, and, gte, lte, desc, sql } from "drizzle-orm";
 import { db, invoicesTable, ordersTable, productsTable, notificationsTable, tenantsTable } from "@workspace/db";
@@ -5,7 +6,7 @@ import { authenticate, requireRole, type AuthRequest } from "../lib/auth";
 
 const router: IRouter = Router();
 
-router.get("/reports/dashboard", authenticate as any, async (req: AuthRequest, res): Promise<void> => {
+router.get("/reports/dashboard", authenticate as any, asyncHandler(async (req: AuthRequest, res): Promise<void> => {
   const tenantId = req.user!.tenantId;
   if (!tenantId) { res.status(403).json({ error: "No tenant" }); return; }
   const today = new Date();
@@ -46,9 +47,9 @@ router.get("/reports/dashboard", authenticate as any, async (req: AuthRequest, r
     })),
     salesByCategory,
   });
-});
+}));
 
-router.get("/reports/sales", authenticate as any, async (req: AuthRequest, res): Promise<void> => {
+router.get("/reports/sales", authenticate as any, asyncHandler(async (req: AuthRequest, res): Promise<void> => {
   const tenantId = req.user!.tenantId;
   if (!tenantId) { res.status(403).json({ error: "No tenant" }); return; }
   const invoices = await db.select().from(invoicesTable).where(and(eq(invoicesTable.tenantId, tenantId), eq(invoicesTable.status, "active"))).orderBy(invoicesTable.createdAt);
@@ -66,9 +67,9 @@ router.get("/reports/sales", authenticate as any, async (req: AuthRequest, res):
     data: Object.entries(dataMap).map(([date, d]) => ({ date, sales: d.sales, invoices: d.invoices })),
     categoryBreakdown: [],
   });
-});
+}));
 
-router.get("/reports/top-products", authenticate as any, async (req: AuthRequest, res): Promise<void> => {
+router.get("/reports/top-products", authenticate as any, asyncHandler(async (req: AuthRequest, res): Promise<void> => {
   const tenantId = req.user!.tenantId;
   if (!tenantId) { res.status(403).json({ error: "No tenant" }); return; }
   const invoices = await db.select().from(invoicesTable).where(and(eq(invoicesTable.tenantId, tenantId), eq(invoicesTable.status, "active")));
@@ -85,9 +86,9 @@ router.get("/reports/top-products", authenticate as any, async (req: AuthRequest
   const limit = parseInt(req.query.limit as string ?? "10", 10);
   const result = Object.entries(productMap).map(([id, d]) => ({ productId: parseInt(id), ...d })).sort((a, b) => b.revenue - a.revenue).slice(0, limit);
   res.json(result);
-});
+}));
 
-router.get("/reports/payment-methods", authenticate as any, async (req: AuthRequest, res): Promise<void> => {
+router.get("/reports/payment-methods", authenticate as any, asyncHandler(async (req: AuthRequest, res): Promise<void> => {
   const tenantId = req.user!.tenantId;
   if (!tenantId) { res.status(403).json({ error: "No tenant" }); return; }
   const invoices = await db.select().from(invoicesTable).where(and(eq(invoicesTable.tenantId, tenantId), eq(invoicesTable.status, "active")));
@@ -103,7 +104,7 @@ router.get("/reports/payment-methods", authenticate as any, async (req: AuthRequ
     cashPercent: total > 0 ? (cashTotal / total) * 100 : 0,
     cardPercent: total > 0 ? (cardTotal / total) * 100 : 0,
   });
-});
+}));
 
 // ─── Super Admin: Platform-wide stats ───────────────────────────────────────
 router.get("/super/stats", authenticate as any, requireRole("super_admin") as any, async (_req, res): Promise<void> => {

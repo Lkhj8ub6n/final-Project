@@ -16,10 +16,15 @@ export default function Login({ onLogin }: LoginProps) {
   const [showServer, setShowServer] = useState(false);
 
   useEffect(() => {
-    window.electronAPI.getConfig("server_url").then((url) => {
-      if (url) setServerUrl(url);
-      else setShowServer(true);
-    }).catch(() => { setShowServer(true); });
+    if (window.electronAPI) {
+      window.electronAPI.getConfig("server_url").then((url) => {
+        if (url) setServerUrl(url);
+        else setShowServer(true);
+      }).catch(() => { setShowServer(true); });
+    } else {
+      setShowServer(true);
+      console.warn("Electron API not found. Running in web mode?");
+    }
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
