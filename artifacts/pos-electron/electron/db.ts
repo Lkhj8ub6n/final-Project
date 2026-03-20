@@ -1,23 +1,23 @@
-import { DatabaseSync, type StatementSync } from "node:sqlite";
+import Database from "better-sqlite3";
 import path from "path";
 import { app } from "electron";
 
-let _db: DatabaseSync | null = null;
+let _db: Database.Database | null = null;
 
-export function getDb(): DatabaseSync {
+export function getDb(): Database.Database {
   if (!_db) {
     const dbPath = path.join(app.getPath("userData"), "pos-local.db");
-    _db = new DatabaseSync(dbPath);
+    _db = new Database(dbPath);
     migrate(_db);
   }
   return _db;
 }
 
-function migrate(db: DatabaseSync): void {
-  db.exec(`
-    PRAGMA journal_mode = WAL;
-    PRAGMA foreign_keys = ON;
+function migrate(db: Database.Database): void {
+  db.pragma("journal_mode = WAL");
+  db.pragma("foreign_keys = ON");
 
+  db.exec(`
     CREATE TABLE IF NOT EXISTS config (
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
@@ -158,14 +158,14 @@ function mapPendingInvoice(row: PendingInvoiceRow): PendingInvoice {
 
 export function getConfig(key: string): string | null {
   const db = getDb();
-  const stmt = db.prepare("SELECT value FROM config WHERE key = ?") as StatementSync;
+  const stmt = db.prepare("SELECT value FROM config WHERE key = ?");
   const row = stmt.get(key) as { value: string } | undefined;
   return row?.value ?? null;
 }
 
 export function setConfig(key: string, value: string): void {
   const db = getDb();
-  const stmt = db.prepare("INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)") as StatementSync;
+  const stmt = db.prepare("INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)");
   stmt.run(key, value);
 }
 
@@ -218,11 +218,11 @@ export function getLocalProducts(search?: string): LocalProduct[] {
   const db = getDb();
   let rows: ProductRow[];
   if (search) {
-    const stmt = db.prepare("SELECT * FROM products WHERE is_active = 1 AND (name LIKE ? OR barcode = ?) ORDER BY name LIMIT 200") as StatementSync;
-    rows = stmt.all(`%${search}%`, search) as unknown as ProductRow[];
+    const stmt = db.prepare("SELECT * FROM products WHERE is_active = 1 AND (name LIKE ? OR barcode = ?) ORDER BY name LIMIT 200");
+    rows = stmt.all(`%${search}%`, search) as ProductRow[];
   } else {
-    const stmt = db.prepare("SELECT * FROM products WHERE is_active = 1 ORDER BY name LIMIT 200") as StatementSync;
-    rows = stmt.all() as unknown as ProductRow[];
+    const stmt = db.prepare("SELECT * FROM products WHERE is_active = 1 ORDER BY name LIMIT 200");
+    rows = stmt.all() as ProductRow[];
   }
   return rows.map(mapProduct);
 }
@@ -233,40 +233,43 @@ export function upsertProducts(products: LocalProduct[]): void {
     INSERT OR REPLACE INTO products
       (id, name, barcode, price, stock_quantity, stock_alert_threshold, category, is_active, synced_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
-  `) as StatementSync;
-  for (const p of products) {
-    stmt.run(p.id, p.name, p.barcode ?? null, p.price, p.stockQuantity, p.stockAlertThreshold, p.category ?? null, p.isActive ? 1 : 0);
-  }
+  `);
+  const upsertMany = db.transaction((prods: LocalProduct[]) => {
+    for (const p of prods) {
+      stmt.run(p.id, p.name, p.barcode ?? null, p.price, p.stockQuantity, p.stockAlertThreshold, p.category ?? null, p.isActive ? 1 : 0);
+    }
+  });
+  upsertMany(products);
 }
 
 export function decrementLocalStock(productId: number, quantity: number): void {
   const db = getDb();
-  const stmt = db.prepare("UPDATE products SET stock_quantity = MAX(0, stock_quantity - ?) WHERE id = ?") as StatementSync;
+  const stmt = db.prepare("UPDATE products SET stock_quantity = MAX(0, stock_quantity - ?) WHERE id = ?");
   stmt.run(quantity, productId);
 }
 
 export function getCurrentLocalShift(): LocalShift | null {
   const db = getDb();
-  const stmt = db.prepare("SELECT * FROM local_shifts WHERE status = 'open' ORDER BY id DESC LIMIT 1") as StatementSync;
-  const row = stmt.get() as unknown as ShiftRow | undefined;
+  const stmt = db.prepare("SELECT * FROM local_shifts WHERE status = 'open' ORDER BY id DESC LIMIT 1");
+  const row = stmt.get() as ShiftRow | undefined;
   return row ? mapShift(row) : null;
 }
 
 export function openLocalShift(openingBalance: number): LocalShift {
   const db = getDb();
-  const stmt = db.prepare("INSERT INTO local_shifts (opening_balance, status) VALUES (?, 'open')") as StatementSync;
+  const stmt = db.prepare("INSERT INTO local_shifts (opening_balance, status) VALUES (?, 'open')");
   const result = stmt.run(openingBalance);
-  const getStmt = db.prepare("SELECT * FROM local_shifts WHERE id = ?") as StatementSync;
-  const row = getStmt.get(Number(result.lastInsertRowid)) as unknown as ShiftRow;
+  const getStmt = db.prepare("SELECT * FROM local_shifts WHERE id = ?");
+  const row = getStmt.get(Number(result.lastInsertRowid)) as ShiftRow;
   return mapShift(row);
 }
 
 export function closeLocalShift(id: number, closingBalance: number): LocalShift {
   const db = getDb();
-  const stmt = db.prepare("UPDATE local_shifts SET closing_balance = ?, status = 'closed', closed_at = datetime('now') WHERE id = ?") as StatementSync;
+  const stmt = db.prepare("UPDATE local_shifts SET closing_balance = ?, status = 'closed', closed_at = datetime('now') WHERE id = ?");
   stmt.run(closingBalance, id);
-  const getStmt = db.prepare("SELECT * FROM local_shifts WHERE id = ?") as StatementSync;
-  const row = getStmt.get(id) as unknown as ShiftRow;
+  const getStmt = db.prepare("SELECT * FROM local_shifts WHERE id = ?");
+  const row = getStmt.get(id) as ShiftRow;
   return mapShift(row);
 }
 
@@ -276,7 +279,7 @@ export function createPendingInvoice(data: Omit<PendingInvoice, "id" | "createdA
     INSERT INTO pending_invoices
       (local_shift_id, remote_shift_id, items, subtotal, discount_amount, total, payment_method)
     VALUES (?, ?, ?, ?, ?, ?, ?)
-  `) as StatementSync;
+  `);
   const result = stmt.run(
     data.localShiftId ?? null,
     data.remoteShiftId ?? null,
@@ -286,33 +289,33 @@ export function createPendingInvoice(data: Omit<PendingInvoice, "id" | "createdA
     data.total,
     data.paymentMethod,
   );
-  const getStmt = db.prepare("SELECT * FROM pending_invoices WHERE id = ?") as StatementSync;
-  const row = getStmt.get(Number(result.lastInsertRowid)) as unknown as PendingInvoiceRow;
+  const getStmt = db.prepare("SELECT * FROM pending_invoices WHERE id = ?");
+  const row = getStmt.get(Number(result.lastInsertRowid)) as PendingInvoiceRow;
   return mapPendingInvoice(row);
 }
 
 export function getPendingInvoices(): PendingInvoice[] {
   const db = getDb();
-  const stmt = db.prepare("SELECT * FROM pending_invoices WHERE is_synced = 0 ORDER BY created_at") as StatementSync;
-  const rows = stmt.all() as unknown as PendingInvoiceRow[];
+  const stmt = db.prepare("SELECT * FROM pending_invoices WHERE is_synced = 0 ORDER BY created_at");
+  const rows = stmt.all() as PendingInvoiceRow[];
   return rows.map(mapPendingInvoice);
 }
 
 export function markInvoiceSynced(id: number, remoteId: number): void {
   const db = getDb();
-  const stmt = db.prepare("UPDATE pending_invoices SET is_synced = 1, remote_id = ? WHERE id = ?") as StatementSync;
+  const stmt = db.prepare("UPDATE pending_invoices SET is_synced = 1, remote_id = ? WHERE id = ?");
   stmt.run(remoteId, id);
 }
 
 export function markInvoiceSyncFailed(id: number, error: string): void {
   const db = getDb();
-  const stmt = db.prepare("UPDATE pending_invoices SET sync_error = ? WHERE id = ?") as StatementSync;
+  const stmt = db.prepare("UPDATE pending_invoices SET sync_error = ? WHERE id = ?");
   stmt.run(error, id);
 }
 
 export function markShiftSynced(localId: number, remoteId: number): void {
   const db = getDb();
-  const stmt = db.prepare("UPDATE local_shifts SET is_synced = 1, remote_id = ? WHERE id = ?") as StatementSync;
+  const stmt = db.prepare("UPDATE local_shifts SET is_synced = 1, remote_id = ? WHERE id = ?");
   stmt.run(remoteId, localId);
 }
 
@@ -327,8 +330,8 @@ export interface UnsyncedShift {
 
 export function getUnsyncedShifts(): UnsyncedShift[] {
   const db = getDb();
-  const stmt = db.prepare("SELECT * FROM local_shifts WHERE is_synced = 0 ORDER BY id") as StatementSync;
-  const rows = stmt.all() as unknown as ShiftRow[];
+  const stmt = db.prepare("SELECT * FROM local_shifts WHERE is_synced = 0 ORDER BY id");
+  const rows = stmt.all() as ShiftRow[];
   return rows.map((row) => ({
     id: row.id,
     openingBalance: row.opening_balance,
@@ -341,19 +344,19 @@ export function getUnsyncedShifts(): UnsyncedShift[] {
 
 export function updateLocalShiftRemoteId(localId: number, remoteId: number): void {
   const db = getDb();
-  const stmt = db.prepare("UPDATE local_shifts SET remote_id = ?, is_synced = 1 WHERE id = ?") as StatementSync;
+  const stmt = db.prepare("UPDATE local_shifts SET remote_id = ?, is_synced = 1 WHERE id = ?");
   stmt.run(remoteId, localId);
 }
 
 export function getPendingInvoiceCount(): number {
   const db = getDb();
-  const stmt = db.prepare("SELECT COUNT(*) as count FROM pending_invoices WHERE is_synced = 0") as StatementSync;
+  const stmt = db.prepare("SELECT COUNT(*) as count FROM pending_invoices WHERE is_synced = 0");
   const row = stmt.get() as { count: number };
   return row.count;
 }
 
 export function addSyncLog(action: string, entity: string, entityId: number | null, success: boolean, message?: string): void {
   const db = getDb();
-  const stmt = db.prepare("INSERT INTO sync_log (action, entity, entity_id, success, message) VALUES (?, ?, ?, ?, ?)") as StatementSync;
+  const stmt = db.prepare("INSERT INTO sync_log (action, entity, entity_id, success, message) VALUES (?, ?, ?, ?, ?)");
   stmt.run(action, entity, entityId ?? null, success ? 1 : 0, message ?? null);
 }

@@ -47,3 +47,20 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+.replit
+.replitignore
+.replit-artifact/
+
+# Environment files (use .env.example as template)
+.env
+.env.local
+.env.*.local
+
+# Docker
+docker-data/
+
+# Electron build output
+artifacts/pos-electron/release/
+
+# Test coverage
+coverage/

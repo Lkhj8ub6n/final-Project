@@ -1,5 +1,11 @@
 import { app, BrowserWindow, ipcMain, shell, dialog, nativeTheme } from "electron";
 import path from "path";
+
+// Fix for Linux GTK 2/3 vs GTK 4 symbol crash
+if (process.platform === "linux") {
+  process.env.GDK_BACKEND = "x11";
+  app.commandLine.appendSwitch("disable-gpu");
+}
 import {
   getConfig, setConfig,
   getLocalProducts, upsertProducts, decrementLocalStock,
@@ -35,10 +41,13 @@ async function checkOnline(): Promise<boolean> {
   try {
     const ctrl = new AbortController();
     const timeout = setTimeout(() => ctrl.abort(), 3000);
-    const res = await fetch(`${serverUrl}/api/health`, { signal: ctrl.signal });
+    const res = await fetch(`${serverUrl}/api/healthz`, { signal: ctrl.signal });
     clearTimeout(timeout);
-    return res.ok;
-  } catch {
+    const ok = res.ok;
+    console.log(`[Connectivity] Check ${serverUrl}/api/healthz -> Status: ${res.status} (${ok ? "OK" : "Failed"})`);
+    return ok;
+  } catch (err) {
+    console.error(`[Connectivity] Error checking ${serverUrl}/api/health:`, err instanceof Error ? err.message : err);
     return false;
   }
 }
@@ -312,6 +321,47 @@ ipcMain.handle("invoices:create", async (_event, invoiceData: CreateInvoicePaylo
 
 ipcMain.handle("invoices:pending-count", () => {
   return getPendingInvoiceCount();
+});
+
+ipcMain.handle("invoices:get", async (_event, invoiceId: number) => {
+  if (isOnline && authToken) {
+    const serverUrl = getConfig("server_url") ?? "";
+    try {
+      const res = await fetch(`${serverUrl}/api/invoices/${invoiceId}`, {
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      if (res.ok) return await res.json();
+    } catch {}
+  }
+  return null;
+});
+
+ipcMain.handle("invoices:list", async (_event, shiftId: number) => {
+  if (isOnline && authToken) {
+    const serverUrl = getConfig("server_url") ?? "";
+    try {
+      const res = await fetch(`${serverUrl}/api/invoices?shiftId=${shiftId}`, {
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      if (res.ok) return await res.json();
+    } catch {}
+  }
+  return [];
+});
+
+ipcMain.handle("returns:create", async (_event, data: unknown) => {
+  if (isOnline && authToken) {
+    const serverUrl = getConfig("server_url") ?? "";
+    const res = await fetch(`${serverUrl}/api/returns`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${authToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    const result = (await res.json()) as { error?: string };
+    if (!res.ok) throw new Error(result.error ?? "Failed to create return");
+  } else {
+    throw new Error("Must be online to create returns");
+  }
 });
 
 ipcMain.handle("print:receipt", async (_event, receiptHtml: string) => {

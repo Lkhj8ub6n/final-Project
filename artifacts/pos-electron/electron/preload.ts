@@ -43,6 +43,15 @@ contextBridge.exposeInMainWorld("electronAPI", {
   createInvoice: (data: unknown): Promise<unknown> =>
     ipcRenderer.invoke("invoices:create", data),
 
+  getInvoice: (invoiceId: number): Promise<unknown> =>
+    ipcRenderer.invoke("invoices:get", invoiceId),
+
+  listInvoices: (shiftId: number): Promise<unknown> =>
+    ipcRenderer.invoke("invoices:list", shiftId),
+
+  createReturn: (data: unknown): Promise<void> =>
+    ipcRenderer.invoke("returns:create", data),
+
   getPendingCount: (): Promise<number> =>
     ipcRenderer.invoke("invoices:pending-count"),
 

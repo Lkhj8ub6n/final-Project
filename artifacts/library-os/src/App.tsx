@@ -19,7 +19,6 @@ import TenantStaff from "@/pages/tenant/staff";
 import TenantReports from "@/pages/tenant/reports";
 import TenantNotifications from "@/pages/tenant/notifications";
 import TenantSettings from "@/pages/tenant/settings";
-import POSSell from "@/pages/pos/sell";
 import StoreHome from "@/pages/store/home";
 import StoreCart from "@/pages/store/cart";
 import StoreMyOrders from "@/pages/store/my-orders";
@@ -82,11 +81,6 @@ function Router() {
       </Route>
       <Route path="/dashboard/settings">
         {() => <ProtectedRoute component={TenantSettings} allowedRoles={["tenant_admin"]} />}
-      </Route>
-
-      {/* POS Routes */}
-      <Route path="/pos/sell">
-        {() => <ProtectedRoute component={POSSell} allowedRoles={["cashier", "tenant_admin"]} />}
       </Route>
 
       {/* Store Routes */}

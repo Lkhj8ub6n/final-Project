@@ -1,9 +1,13 @@
 import { autoUpdater } from "electron-updater";
-import { BrowserWindow } from "electron";
+import { BrowserWindow, app } from "electron";
 
 export function setupAutoUpdater(win: BrowserWindow): void {
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
+
+  if (!app.isPackaged) {
+    autoUpdater.forceDevUpdateConfig = true;
+  }
 
   autoUpdater.on("checking-for-update", () => {
     sendStatus(win, "checking");

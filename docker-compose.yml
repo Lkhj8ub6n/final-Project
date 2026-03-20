@@ -1,0 +1,43 @@
+# Docker Compose for LibraryOS SaaS
+# Usage: docker compose up -d
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:17-alpine
+    container_name: libraryos-db
+    restart: unless-stopped
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: libraryos
+      POSTGRES_PASSWORD: libraryos_secret
+      POSTGRES_DB: libraryos
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U libraryos"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # API Server
+  api-server:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: libraryos-api
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      DATABASE_URL: postgresql://libraryos:libraryos_secret@postgres:5432/libraryos
+      PORT: "8080"
+      JWT_SECRET: change_me_in_production
+      NODE_ENV: production
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres_data:

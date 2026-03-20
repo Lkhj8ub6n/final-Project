@@ -37,6 +37,11 @@ export interface InvoiceItem {
 export interface Invoice {
   id: number | string;
   total: number;
+  discountAmount?: number;
+  discountPercent?: number;
+  paymentMethod: "cash" | "card";
+  items: InvoiceItem[];
+  createdAt: string;
   offline?: boolean;
 }
 
@@ -55,7 +60,10 @@ export interface ElectronAPI {
   openShift(openingBalance: number): Promise<Shift>;
   closeShift(shiftId: number, closingBalance: number, isRemote: boolean): Promise<Shift>;
   getShiftDetails(shiftId: number, isRemote: boolean): Promise<Shift | null>;
-  createInvoice(data: { shiftId: number; items: InvoiceItem[]; discountAmount?: number; paymentMethod: "cash" | "card" }): Promise<Invoice>;
+  createInvoice(data: { shiftId: number; items: InvoiceItem[]; discountAmount?: number; discountPercent?: number; paymentMethod: "cash" | "card" }): Promise<Invoice>;
+  getInvoice(invoiceId: number): Promise<Invoice | null>;
+  listInvoices(shiftId: number): Promise<Invoice[]>;
+  createReturn(data: { invoiceId: number; items: Array<{ productId?: number; productName?: string; quantity: number; unitPrice: number }>; reason: string; refundMethod: "cash" | "credit" }): Promise<void>;
   getPendingCount(): Promise<number>;
   printReceipt(receiptHtml: string): Promise<void>;
   triggerSync(): Promise<{ ok?: boolean; error?: string }>;
